@@ -19,11 +19,11 @@ pub struct Class {
     #[br(temp)]
     fields_count: u16,
     #[br(count = fields_count)]
-    fields: Vec<todo!()>,
+    fields: Vec<FieldInfo>,
     #[br(temp)]
     methods_count: u16,
     #[br(count = methods_count)]
-    methods: Vec<todo!()>,
+    methods: Vec<MethodInfo>,
     #[br(temp)]
     attr_count: u16,
     #[br(count = attr_count)]
@@ -88,6 +88,28 @@ pub enum ConstPoolEntry {
         bootstrap_index: u16,
         name_type_index: u16,
     },
+}
+
+#[binread]
+pub struct FieldInfo {
+    flags: u16, //bitfield
+    name_index: u16,
+    descriptor_index: u16,
+    #[br(temp)]
+    attributes_count: u16,
+    #[br(count = attributes_count)]
+    attributes: Vec<AttributeInfo>,
+}
+
+#[binread]
+pub struct MethodInfo {
+    flags: u16, //bitfield
+    name_index: u16,
+    descriptor_index: u16,
+    #[br(temp)]
+    attributes_count: u16,
+    #[br(count = attributes_count)]
+    attributes: Vec<AttributeInfo>,
 }
 
 #[binread]
