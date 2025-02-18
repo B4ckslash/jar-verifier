@@ -30,6 +30,13 @@ pub struct Class {
     attributes: Vec<AttributeInfo>,
 }
 
+fn read_utf8_lossy(data: Vec<u8>) -> String {
+    match String::from_utf8(data) {
+        Ok(s) => s,
+        Err(_) => "N/A".to_owned(),
+    }
+}
+
 #[binread]
 pub enum ConstPoolEntry {
     #[br(magic = 0x07u8)]
@@ -60,15 +67,27 @@ pub enum ConstPoolEntry {
     #[br(magic = 0x06u8)]
     Double { value: f64 },
     #[br(magic = 0x0Cu8)]
-    NameAndType,
+    NameAndType {
+        name_index: u16,
+        descriptor_index: u16,
+    },
     #[br(magic = 0x01u8)]
-    Utf8,
+    Utf8 {
+        #[br(temp)]
+        length: u16,
+        #[br(count = length, map = |s: Vec<u8>| read_utf8_lossy(s))]
+        value: String,
+    },
     #[br(magic = 0x0Eu8)]
-    MethodHandle,
+    MethodHandle { ref_kind: u8, ref_index: u16 },
     #[br(magic = 0x0Fu8)]
-    MethodType,
+    MethodType { descriptor_index: u16 },
     #[br(magic = 0x12u8)]
-    InvokeDynamic,
+    InvokeDynamic {
+        #[br(ignore)]
+        bootstrap_index: u16,
+        name_type_index: u16,
+    },
 }
 
 #[binread]
