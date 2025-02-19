@@ -2,16 +2,17 @@ pub mod java_class {
     use binrw::prelude::*;
 
     #[binread]
+    #[derive(Debug)]
     #[br(magic = 0xCAFEBABEu32)]
     pub struct Class {
         min_ver: u16,
         maj_ver: u16,
         #[br(temp)]
         const_pool_count: u16,
-        #[br(count = const_pool_count)]
-        const_pool: Vec<ConstPoolEntry>,
+        #[br(parse_with = parse_const_pool, args(const_pool_count))]
+        pub const_pool: Vec<ConstPoolEntry>,
         access_modifiers: u16, //bitfield
-        this_class_idx: u16,
+        pub this_class_idx: u16,
         super_class_idx: u16,
         #[br(temp)]
         iface_count: u16,
@@ -28,7 +29,7 @@ pub mod java_class {
         #[br(temp)]
         attr_count: u16,
         #[br(count = attr_count)]
-        attributes: Vec<AttributeInfo>,
+        pub attributes: Vec<AttributeInfo>,
     }
 
     fn read_utf8_lossy(data: Vec<u8>) -> String {
@@ -38,7 +39,24 @@ pub mod java_class {
         }
     }
 
+    #[binrw::parser(reader, endian)]
+    fn parse_const_pool(count: u16) -> binrw::BinResult<Vec<ConstPoolEntry>> {
+        let mut result = Vec::with_capacity(count as usize);
+        let mut i = 1;
+        while i < count {
+            let val = ConstPoolEntry::read_options(reader, endian, ())?;
+            //doubles and longs take up two indices, so we manually advance them one further
+            match val {
+                ConstPoolEntry::Long { .. } | ConstPoolEntry::Double { .. } => i += 2,
+                _ => i += 1,
+            };
+            result.push(val);
+        }
+        Ok(result)
+    }
+
     #[binread]
+    #[derive(Debug)]
     pub enum ConstPoolEntry {
         #[br(magic = 0x07u8)]
         Class { name_index: u16 },
@@ -79,19 +97,19 @@ pub mod java_class {
             #[br(count = length, map = |s: Vec<u8>| read_utf8_lossy(s))]
             value: String,
         },
-        #[br(magic = 0x0Eu8)]
-        MethodHandle { ref_kind: u8, ref_index: u16 },
         #[br(magic = 0x0Fu8)]
+        MethodHandle { ref_kind: u8, ref_index: u16 },
+        #[br(magic = 0x10u8)]
         MethodType { descriptor_index: u16 },
         #[br(magic = 0x12u8)]
         InvokeDynamic {
-            #[br(ignore)]
             bootstrap_index: u16,
             name_type_index: u16,
         },
     }
 
     #[binread]
+    #[derive(Debug)]
     pub struct FieldInfo {
         flags: u16, //bitfield
         name_index: u16,
@@ -103,6 +121,7 @@ pub mod java_class {
     }
 
     #[binread]
+    #[derive(Debug)]
     pub struct MethodInfo {
         flags: u16, //bitfield
         name_index: u16,
@@ -114,6 +133,7 @@ pub mod java_class {
     }
 
     #[binread]
+    #[derive(Debug)]
     pub struct AttributeInfo {
         name_index: u16,
         #[br(temp)]
