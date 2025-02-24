@@ -1,5 +1,5 @@
 use binrw::BinReaderExt;
-use import_checker::{Consumer, Provider};
+use reference_checker::{Consumer, Provider};
 use std::{env, fs::File};
 
 use java_class::java_class::Class;

@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 java_class = { path = "./src/parsing/java_class/" }
-import_checker = { path = "./src/parsing/import_checker/" }
+reference_checker = { path = "./src/parsing/reference_checker/" }
 binrw = "0.14.1"
