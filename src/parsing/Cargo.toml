@@ -1,4 +1,4 @@
 [workspace]
 
 resolver = "2"
-members = ["java_class"]
+members = ["java_class", "import_checker"]
