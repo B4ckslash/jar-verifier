@@ -1,7 +1,10 @@
 pub mod java_class {
-    use std::collections::HashMap;
+    use std::io::{Read, Seek};
+    use std::{collections::HashMap, fs::File};
 
+    use binrw::io::NoSeek;
     use binrw::prelude::*;
+    use binrw::BinReaderExt;
 
     #[binread]
     #[derive(Debug)]
@@ -32,6 +35,15 @@ pub mod java_class {
         attr_count: u16,
         #[br(count = attr_count)]
         pub attributes: Vec<AttributeInfo>,
+    }
+
+    impl Class {
+        pub fn from<T>(data: &mut T) -> Self
+        where
+            T: Read + Seek,
+        {
+            data.read_be().unwrap()
+        }
     }
 
     fn read_utf8_lossy(data: Vec<u8>) -> String {
