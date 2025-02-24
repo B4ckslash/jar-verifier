@@ -6,6 +6,7 @@ use std::{
 };
 
 use java_class::java_class::{Class, ConstPoolEntry};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use zip::ZipArchive;
 
@@ -18,9 +19,10 @@ trait Provider {
 }
 
 fn get_references(candidate: &str) -> HashSet<String> {
-    let re = Regex::new(r"^((?:[[:alnum:]\$]+/)+[[:alnum:]\$]+)").expect("Invalid Regex!");
+    static RE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"^((?:[[:word:]\$]+/)+[[:word:]\$]+)").expect("Invalid Regex!"));
     let mut result = HashSet::new();
-    if let Some(caps) = re.captures(candidate) {
+    if let Some(caps) = RE.captures(candidate) {
         for cap in caps.iter().flatten() {
             let cap = match cap.as_str().strip_prefix('L') {
                 Some(trimmed) => trimmed,

@@ -492,6 +492,7 @@ name = "reference_checker"
 version = "0.1.0"
 dependencies = [
  "java_class",
+ "once_cell",
  "regex",
  "zip",
 ]
