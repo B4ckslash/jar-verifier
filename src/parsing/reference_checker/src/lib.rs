@@ -12,7 +12,7 @@ pub trait Provider {
 }
 
 fn get_references(candidate: &str) -> HashSet<&str> {
-    let re = Regex::new(r"^((?:[[:alnum:]]+/)+[[:alnum:]]+)").expect("Invalid Regex!");
+    let re = Regex::new(r"^((?:[[:alnum:]\$]+/)+[[:alnum:]\$]+)").expect("Invalid Regex!");
     let mut result = HashSet::new();
     if let Some(caps) = re.captures(candidate) {
         for cap in caps.iter().flatten() {
