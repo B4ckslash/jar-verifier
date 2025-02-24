@@ -1,4 +1,6 @@
 pub mod java_class {
+    use std::collections::HashMap;
+
     use binrw::prelude::*;
 
     #[binread]
@@ -10,7 +12,7 @@ pub mod java_class {
         #[br(temp)]
         const_pool_count: u16,
         #[br(parse_with = parse_const_pool, args(const_pool_count))]
-        pub const_pool: Vec<ConstPoolEntry>,
+        pub const_pool: HashMap<u16, ConstPoolEntry>,
         access_modifiers: u16, //bitfield
         pub this_class_idx: u16,
         super_class_idx: u16,
@@ -40,17 +42,18 @@ pub mod java_class {
     }
 
     #[binrw::parser(reader, endian)]
-    fn parse_const_pool(count: u16) -> binrw::BinResult<Vec<ConstPoolEntry>> {
-        let mut result = Vec::with_capacity(count as usize);
+    fn parse_const_pool(count: u16) -> binrw::BinResult<HashMap<u16, ConstPoolEntry>> {
+        let mut result = HashMap::with_capacity(count as usize);
         let mut i = 1;
         while i < count {
             let val = ConstPoolEntry::read_options(reader, endian, ())?;
             //doubles and longs take up two indices, so we manually advance them one further
-            match val {
-                ConstPoolEntry::Long { .. } | ConstPoolEntry::Double { .. } => i += 2,
-                _ => i += 1,
+            let next_i = match val {
+                ConstPoolEntry::Long { .. } | ConstPoolEntry::Double { .. } => i + 2,
+                _ => i + 1,
             };
-            result.push(val);
+            result.insert(i, val);
+            i = next_i;
         }
         Ok(result)
     }
