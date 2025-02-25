@@ -1,4 +1,4 @@
-use std::{env, path::Path};
+use std::env;
 
 use reference_checker::parse_classpath;
 
