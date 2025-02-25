@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::File,
     io::{Cursor, Read},
     path::Path,
@@ -114,11 +114,11 @@ impl Provider for Class {
     }
 }
 
-pub fn read_zip_archive(path: &Path) -> (HashSet<String>, HashSet<String>) {
+fn read_zip_archive(path: &Path) -> HashMap<String, Class> {
+    println!("Reading zip file {:?}", path);
     let file = File::open(path).unwrap();
     let mut archive = ZipArchive::new(file).unwrap();
-    let mut provides = HashSet::new();
-    let mut requires = HashSet::new();
+    let mut classes = HashMap::new();
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
         if let Some(path) = file.enclosed_name() {
@@ -129,11 +129,32 @@ pub fn read_zip_archive(path: &Path) -> (HashSet<String>, HashSet<String>) {
                         continue;
                     }
                     let class_parsed = Class::from(&mut Cursor::new(file_inmem));
-                    provides.extend(class_parsed.get_provided());
-                    requires.extend(class_parsed.get_consumed());
+                    let ConstPoolEntry::Class { name_index } =
+                        &class_parsed.const_pool[&class_parsed.this_class_idx]
+                    else {
+                        continue;
+                    };
+                    let Some(class_name) = get_utf8(&class_parsed, name_index) else {
+                        continue;
+                    };
+                    classes.insert(class_name.to_owned(), class_parsed);
                 }
             }
         }
     }
-    (provides, requires)
+    classes
+}
+
+pub fn parse_classpath(cp: &str) -> HashMap<String, Class> {
+    let mut result = HashMap::new();
+    for element in cp.split(';') {
+        let element = shellexpand::full(element).expect("Failed to expand input!");
+        for entry in glob::glob(element.as_ref()).expect("Failed to expand glob pattern!") {
+            match entry {
+                Ok(path) => result.extend(read_zip_archive(path.as_path())),
+                Err(e) => println!("Glob error: {:?}", e),
+            };
+        }
+    }
+    result
 }
