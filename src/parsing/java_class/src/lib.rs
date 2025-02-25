@@ -120,6 +120,10 @@ pub mod java_class {
             bootstrap_index: u16,
             name_type_index: u16,
         },
+        #[br(magic = 0x13u8)]
+        Module { name_index: u16 },
+        #[br(magic = 0x14u8)]
+        Package { name_index: u16 },
     }
 
     #[binread]
