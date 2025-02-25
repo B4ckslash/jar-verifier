@@ -72,6 +72,13 @@ pub mod java_class {
     #[binread]
     #[derive(Debug)]
     pub enum ConstPoolEntry {
+        #[br(magic = 0x01u8)]
+        Utf8 {
+            #[br(temp)]
+            length: u16,
+            #[br(count = length, map = |s: Vec<u8>| read_utf8_lossy(s))]
+            value: String,
+        },
         #[br(magic = 0x07u8)]
         Class { name_index: u16 },
         #[br(magic = 0x09u8)]
@@ -103,13 +110,6 @@ pub mod java_class {
         NameAndType {
             name_index: u16,
             descriptor_index: u16,
-        },
-        #[br(magic = 0x01u8)]
-        Utf8 {
-            #[br(temp)]
-            length: u16,
-            #[br(count = length, map = |s: Vec<u8>| read_utf8_lossy(s))]
-            value: String,
         },
         #[br(magic = 0x0Fu8)]
         MethodHandle { ref_kind: u8, ref_index: u16 },
