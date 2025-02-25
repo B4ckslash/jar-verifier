@@ -34,12 +34,55 @@ fn get_references(candidate: &str) -> HashSet<String> {
     result
 }
 
+fn get_utf8<'a>(class: &'a Class, index: &u16) -> Option<&'a str> {
+    if let ConstPoolEntry::Utf8 { value } = &class.const_pool[index] {
+        Some(value.as_str())
+    } else {
+        println!("Not a UTF8 entry at idx {}!", index);
+        None
+    }
+}
+
 impl Consumer for Class {
     fn get_consumed(&self) -> HashSet<String> {
         let mut imports = HashSet::new();
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Utf8 { value }) = cp_info {
                 imports.extend(get_references(value));
+            }
+            if let (
+                _,
+                ConstPoolEntry::MethodRef {
+                    class_index,
+                    name_type_index,
+                },
+            ) = cp_info
+            {
+                let ConstPoolEntry::Class { name_index } = &self.const_pool[class_index] else {
+                    println!("Not a class info entry at idx {}!", class_index);
+                    continue;
+                };
+                let Some(class_name) = get_utf8(self, name_index) else {
+                    continue;
+                };
+                let ConstPoolEntry::NameAndType {
+                    name_index: method_name_index,
+                    descriptor_index,
+                } = &self.const_pool[name_type_index]
+                else {
+                    println!("Not a NameAndType entry at idx {}!", name_type_index);
+                    continue;
+                };
+                let Some(method_name) = get_utf8(self, method_name_index) else {
+                    continue;
+                };
+                let Some(method_descriptor) = get_utf8(self, descriptor_index) else {
+                    continue;
+                };
+                imports.insert(format!(
+                    "{}#{}{}",
+                    class_name, method_name, method_descriptor,
+                ));
             }
         }
         imports
@@ -50,8 +93,21 @@ impl Provider for Class {
     fn get_provided(&self) -> HashSet<String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
-            if let ConstPoolEntry::Utf8 { value } = &self.const_pool[&name_index] {
-                result.insert(value.to_owned());
+            let Some(class_name) = get_utf8(self, &name_index) else {
+                return result;
+            };
+            result.insert(class_name.to_owned());
+            for method_info in &self.methods {
+                let Some(method_name) = get_utf8(self, &method_info.name_index) else {
+                    continue;
+                };
+                let Some(method_descriptor) = get_utf8(self, &method_info.descriptor_index) else {
+                    continue;
+                };
+                result.insert(format!(
+                    "{}#{}{}",
+                    class_name, method_name, method_descriptor,
+                ));
             }
         }
         result

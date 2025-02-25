@@ -1,8 +1,7 @@
 pub mod java_class {
+    use std::collections::HashMap;
     use std::io::{Read, Seek};
-    use std::{collections::HashMap, fs::File};
 
-    use binrw::io::NoSeek;
     use binrw::prelude::*;
     use binrw::BinReaderExt;
 
@@ -30,7 +29,7 @@ pub mod java_class {
         #[br(temp)]
         methods_count: u16,
         #[br(count = methods_count)]
-        methods: Vec<MethodInfo>,
+        pub methods: Vec<MethodInfo>,
         #[br(temp)]
         attr_count: u16,
         #[br(count = attr_count)]
@@ -139,8 +138,8 @@ pub mod java_class {
     #[derive(Debug)]
     pub struct MethodInfo {
         flags: u16, //bitfield
-        name_index: u16,
-        descriptor_index: u16,
+        pub name_index: u16,
+        pub descriptor_index: u16,
         #[br(temp)]
         attributes_count: u16,
         #[br(count = attributes_count)]
