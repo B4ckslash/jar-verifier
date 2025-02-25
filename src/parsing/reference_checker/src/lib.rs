@@ -7,15 +7,16 @@ use std::{
 
 use java_class::java_class::{Class, ConstPoolEntry};
 use once_cell::sync::Lazy;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use regex::Regex;
 use zip::ZipArchive;
 
 trait Consumer {
-    fn get_consumed(&self) -> HashSet<String>;
+    fn get_consumed(&self, classes: &HashMap<String, Class>) -> HashSet<String>;
 }
 
 trait Provider {
-    fn get_provided(&self) -> HashSet<String>;
+    fn get_provided(&self, classes: &HashMap<String, Class>) -> HashSet<String>;
 }
 
 fn get_references(candidate: &str) -> HashSet<String> {
@@ -44,7 +45,7 @@ fn get_utf8<'a>(class: &'a Class, index: &u16) -> Option<&'a str> {
 }
 
 impl Consumer for Class {
-    fn get_consumed(&self) -> HashSet<String> {
+    fn get_consumed(&self, classes: &HashMap<String, Class>) -> HashSet<String> {
         let mut imports = HashSet::new();
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Utf8 { value }) = cp_info {
@@ -90,7 +91,7 @@ impl Consumer for Class {
 }
 
 impl Provider for Class {
-    fn get_provided(&self) -> HashSet<String> {
+    fn get_provided(&self, classes: &HashMap<String, Class>) -> HashSet<String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let Some(class_name) = get_utf8(self, &name_index) else {
@@ -157,4 +158,13 @@ pub fn parse_classpath(cp: &str) -> HashMap<String, Class> {
         }
     }
     result
+}
+
+pub fn check_classes(classes: &HashMap<String, Class>) -> HashSet<String> {
+    classes
+        .par_iter()
+        .map(|(_, class)| (class.get_consumed(classes)))
+        .reduce(HashSet::new, |existing, new| {
+            existing.union(&new).cloned().collect()
+        })
 }
