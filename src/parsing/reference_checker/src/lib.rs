@@ -11,6 +11,10 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use regex::Regex;
 use zip::ZipArchive;
 
+pub mod error;
+
+pub type Result<T> = std::result::Result<T, error::CheckError>;
+
 trait Consumer {
     fn get_consumed(&self, classes: &HashMap<String, Class>) -> HashSet<String>;
 }
@@ -115,16 +119,25 @@ impl Provider for Class {
     }
 }
 
-fn read_zip_archive(path: &Path) -> HashMap<String, Class> {
-    println!("Reading zip file {:?}", path);
-    let file = File::open(path).unwrap();
-    let mut archive = ZipArchive::new(file).unwrap();
+fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
+    println!("Processing file {}...", path.to_str().unwrap());
+    let file = File::options()
+        .read(true)
+        .write(false)
+        .create_new(false)
+        .open(path)?;
+    let mut archive = ZipArchive::new(file)?;
     let mut classes = HashMap::new();
+
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
+        let mut file = archive.by_index(i)?;
         if let Some(path) = file.enclosed_name() {
             if let Some(ext) = path.extension() {
-                if ext.to_str().unwrap() == "class" {
+                if ext
+                    .to_str()
+                    .ok_or("Failed to read file extension string!".to_owned())?
+                    == "class"
+                {
                     let mut file_inmem: Vec<u8> = vec![];
                     if file.read_to_end(&mut file_inmem).is_err() {
                         continue;
@@ -143,28 +156,31 @@ fn read_zip_archive(path: &Path) -> HashMap<String, Class> {
             }
         }
     }
-    classes
+    Ok(classes)
 }
 
-pub fn parse_classpath(cp: &str) -> HashMap<String, Class> {
+pub fn parse_classpath(cp: &str) -> Result<HashMap<String, Class>> {
     let mut result = HashMap::new();
     for element in cp.split(';') {
-        let element = shellexpand::full(element).expect("Failed to expand input!");
-        for entry in glob::glob(element.as_ref()).expect("Failed to expand glob pattern!") {
-            match entry {
-                Ok(path) => result.extend(read_zip_archive(path.as_path())),
-                Err(e) => println!("Glob error: {:?}", e),
-            };
+        let element = shellexpand::full(element)?;
+        if element.contains('*') {
+            for entry in glob::glob(element.as_ref())? {
+                let path = entry?;
+                result.extend(read_zip_archive(path.as_path())?);
+            }
+        } else {
+            result.extend(read_zip_archive(Path::new(element.as_ref()))?);
         }
     }
-    result
+    Ok(result)
 }
 
-pub fn check_classes(classes: &HashMap<String, Class>) -> HashSet<String> {
-    classes
+pub fn check_classes(classes: &HashMap<String, Class>) -> Result<HashSet<String>> {
+    let result = classes
         .par_iter()
         .map(|(_, class)| (class.get_consumed(classes)))
         .reduce(HashSet::new, |existing, new| {
             existing.union(&new).cloned().collect()
-        })
+        });
+    Ok(result)
 }

@@ -426,6 +426,7 @@ dependencies = [
 name = "reference_checker"
 version = "0.1.0"
 dependencies = [
+ "binrw",
  "glob",
  "java_class",
  "once_cell",
