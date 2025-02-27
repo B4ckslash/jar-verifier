@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 binrw = "0.14.1"
+modular-bitfield-msb = "0.11.2"

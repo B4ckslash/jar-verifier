@@ -151,6 +151,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
                     let Some(class_name) = get_utf8(&class_parsed, name_index) else {
                         continue;
                     };
+                    println!("{} {:?}", class_name, class_parsed.flags);
                     classes.insert(class_name.to_owned(), class_parsed);
                 }
             }

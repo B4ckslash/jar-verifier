@@ -4,6 +4,7 @@ pub mod java_class {
 
     use binrw::prelude::*;
     use binrw::BinReaderExt;
+    use modular_bitfield_msb::prelude::*;
 
     #[binread]
     #[derive(Debug)]
@@ -15,7 +16,7 @@ pub mod java_class {
         const_pool_count: u16,
         #[br(parse_with = parse_const_pool, args(const_pool_count))]
         pub const_pool: HashMap<u16, ConstPoolEntry>,
-        access_modifiers: u16, //bitfield
+        pub flags: ClassFlags,
         pub this_class_idx: u16,
         super_class_idx: u16,
         #[br(temp)]
@@ -43,6 +44,49 @@ pub mod java_class {
         {
             data.read_be().unwrap()
         }
+    }
+
+    /*
+     * 2 Bytes = 0x0000
+     * 0000 0000 0000 0000
+     * ||||  ||    ||    1 public
+     * ||||  ||    |1      final
+     * ||||  ||    1       super
+     * ||||  |1            interface
+     * ||||  1             abstract
+     * |||1                synthetic
+     * ||1                 annotation
+     * |1                  enum
+     * 1                   module
+     */
+    #[bitfield(bytes = 2)]
+    #[derive(Debug, BinRead)]
+    #[br(map = Self::from_bytes)]
+    pub struct ClassFlags {
+        #[skip(setters)]
+        module: bool,
+        #[skip(setters)]
+        is_enum: bool,
+        #[skip(setters)]
+        annotation: bool,
+        #[skip(setters)]
+        synthetic: bool,
+        #[skip]
+        __: B1,
+        #[skip(setters)]
+        is_abstract: bool,
+        #[skip(setters)]
+        interface: bool,
+        #[skip]
+        __: B3,
+        #[skip(setters)]
+        is_super: bool,
+        #[skip(setters)]
+        is_final: bool,
+        #[skip]
+        __: B3,
+        #[skip(setters)]
+        public: bool,
     }
 
     fn read_utf8_lossy(data: Vec<u8>) -> String {
