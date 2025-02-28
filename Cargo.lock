@@ -285,7 +285,10 @@ name = "java_class"
 version = "0.1.0"
 dependencies = [
  "binrw",
+ "glob",
  "modular-bitfield-msb",
+ "shellexpand",
+ "zip",
 ]
 
 [[package]]
@@ -449,13 +452,10 @@ name = "reference_checker"
 version = "0.1.0"
 dependencies = [
  "binrw",
- "glob",
  "java_class",
  "once_cell",
  "rayon",
  "regex",
- "shellexpand",
- "zip",
 ]
 
 [[package]]

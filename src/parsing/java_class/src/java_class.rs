@@ -43,6 +43,15 @@ impl Class {
     {
         data.read_be().unwrap()
     }
+
+    pub fn get_utf8<'a>(&'a self, index: &u16) -> Option<&'a str> {
+        if let ConstPoolEntry::Utf8 { value } = &self.const_pool[index] {
+            Some(value.as_str())
+        } else {
+            println!("Not a UTF8 entry at idx {}!", index);
+            None
+        }
+    }
 }
 
 /*
