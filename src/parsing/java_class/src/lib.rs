@@ -185,13 +185,65 @@ pub mod java_class {
     #[binread]
     #[derive(Debug)]
     pub struct MethodInfo {
-        flags: u16, //bitfield
+        flags: MethodFlags,
         pub name_index: u16,
         pub descriptor_index: u16,
         #[br(temp)]
         attributes_count: u16,
         #[br(count = attributes_count)]
         attributes: Vec<AttributeInfo>,
+    }
+
+    /*
+     * 0000 0000 0000 0000
+     *    | || | |||| |||1 public
+     *    | || | |||| ||1  private
+     *    | || | |||| |1   protected
+     *    | || | |||| 1    static
+     *    | || | |||1      final
+     *    | || | ||1       synchronized
+     *    | || | |1        bridge
+     *    | || | 1         varargs
+     *    | || 1           native
+     *    | |1             abstract
+     *    | 1              strict
+     *    1                synthetic
+     */
+    #[bitfield(bytes = 2)]
+    #[derive(Debug, BinRead)]
+    #[br(map = Self::from_bytes)]
+    pub struct MethodFlags {
+        #[skip]
+        __: B3,
+        #[skip(setters)]
+        synthetic: bool,
+
+        #[skip(setters)]
+        is_strict: bool,
+        #[skip(setters)]
+        is_abstract: bool,
+        #[skip]
+        __: B1,
+        #[skip(setters)]
+        is_native: bool,
+
+        #[skip(setters)]
+        has_varargs: bool,
+        #[skip(setters)]
+        is_bridge: bool,
+        #[skip(setters)]
+        is_synchronized: bool,
+        #[skip(setters)]
+        is_final: bool,
+
+        #[skip(setters)]
+        is_static: bool,
+        #[skip(setters)]
+        is_protected: bool,
+        #[skip(setters)]
+        is_private: bool,
+        #[skip(setters)]
+        is_public: bool,
     }
 
     #[binread]
