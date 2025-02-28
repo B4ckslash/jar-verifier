@@ -9,3 +9,7 @@ edition = "2021"
 java_class = { path = "./src/parsing/java_class/" }
 reference_checker = { path = "./src/parsing/reference_checker/" }
 binrw = "0.14.1"
+
+[workspace]
+resolver = "2"
+members = ["src/parsing/java_class", "src/parsing/reference_checker"]
