@@ -17,3 +17,4 @@ zip = { version = "2.2.2", default-features = false, features = [
   "lzma",
   "zstd",
 ] }
+log = "0.4.26"

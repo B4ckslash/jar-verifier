@@ -9,6 +9,7 @@ edition = "2021"
 java_class = { path = "./src/parsing/java_class/" }
 reference_checker = { path = "./src/checking/reference_checker/" }
 binrw = "0.14.1"
+env_logger = "0.11.6"
 
 [workspace]
 resolver = "2"

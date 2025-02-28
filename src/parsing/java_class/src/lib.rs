@@ -6,6 +6,7 @@ use std::{
 };
 
 use java_class::{Class, ConstPoolEntry};
+use log::info;
 use zip::ZipArchive;
 
 pub mod error;
@@ -14,7 +15,7 @@ pub mod java_class;
 type Result<T> = std::result::Result<T, error::Error>;
 
 fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
-    println!("Processing file {}...", path.to_str().unwrap());
+    info!("Processing file {}...", path.to_str().unwrap());
     let file = File::options()
         .read(true)
         .write(false)
