@@ -1,10 +1,8 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use java_class::java_class::{Class, ConstPoolEntry};
-use log::{debug, trace};
-use once_cell::sync::Lazy;
+use log::debug;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use regex::Regex;
 
 struct ClassRequirements<'a> {
     classes: Vec<&'a str>,
@@ -20,22 +18,6 @@ trait Provider {
         &self,
         classes: &HashMap<String, Class>,
     ) -> Result<(&str, HashSet<String>), String>;
-}
-
-fn get_references(candidate: &str) -> HashSet<&str> {
-    static RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^((?:[[:word:]\$]+/)+[[:word:]\$]+)").expect("Invalid Regex!"));
-    let mut result = HashSet::new();
-    if let Some(caps) = RE.captures(candidate) {
-        for cap in caps.iter().flatten() {
-            let cap = match cap.as_str().strip_prefix('L') {
-                Some(trimmed) => trimmed,
-                None => cap.as_str(),
-            };
-            result.insert(cap);
-        }
-    }
-    result
 }
 
 impl<'a> Consumer<'a> for Class {
