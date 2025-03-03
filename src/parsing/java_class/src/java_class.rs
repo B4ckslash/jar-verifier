@@ -18,7 +18,7 @@ pub struct Class {
     pub const_pool: HashMap<u16, ConstPoolEntry>,
     pub flags: ClassFlags,
     pub this_class_idx: u16,
-    super_class_idx: u16,
+    pub super_class_idx: u16,
     #[br(temp)]
     iface_count: u16,
     #[br(count = iface_count)]

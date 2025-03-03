@@ -546,6 +546,7 @@ version = "0.1.0"
 dependencies = [
  "binrw",
  "java_class",
+ "log",
  "once_cell",
  "rayon",
  "regex",
