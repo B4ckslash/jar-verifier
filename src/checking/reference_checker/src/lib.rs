@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use java_class::java_class::{Class, ConstPoolEntry};
 use log::{debug, trace};
@@ -6,8 +6,13 @@ use once_cell::sync::Lazy;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use regex::Regex;
 
-trait Consumer {
-    fn get_consumed(&self, classes: &HashMap<String, Class>) -> Result<HashSet<String>, String>;
+struct ClassRequirements<'a> {
+    classes: Vec<&'a str>,
+    methods: Vec<(&'a str, String)>,
+}
+
+trait Consumer<'a> {
+    fn get_consumed(&'a self) -> Result<ClassRequirements<'a>, String>;
 }
 
 trait Provider {
@@ -17,7 +22,7 @@ trait Provider {
     ) -> Result<(&str, HashSet<String>), String>;
 }
 
-fn get_references(candidate: &str) -> HashSet<String> {
+fn get_references(candidate: &str) -> HashSet<&str> {
     static RE: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"^((?:[[:word:]\$]+/)+[[:word:]\$]+)").expect("Invalid Regex!"));
     let mut result = HashSet::new();
@@ -27,18 +32,19 @@ fn get_references(candidate: &str) -> HashSet<String> {
                 Some(trimmed) => trimmed,
                 None => cap.as_str(),
             };
-            result.insert(cap.to_owned());
+            result.insert(cap);
         }
     }
     result
 }
 
-impl Consumer for Class {
-    fn get_consumed(&self, classes: &HashMap<String, Class>) -> Result<HashSet<String>, String> {
-        let mut imports = HashSet::new();
+impl<'a> Consumer<'a> for Class {
+    fn get_consumed(&'a self) -> Result<ClassRequirements<'a>, String> {
+        let mut class_imports = vec![];
+        let mut required_methods = vec![];
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Utf8 { value }) = cp_info {
-                imports.extend(get_references(value));
+                class_imports.extend(get_references(value));
             }
             if let (
                 _,
@@ -49,12 +55,11 @@ impl Consumer for Class {
             ) = cp_info
             {
                 let ConstPoolEntry::Class { name_index } = &self.const_pool[class_index] else {
-                    println!("Not a class info entry at idx {}!", class_index);
-                    continue;
+                    return Err(format!("Not a class info entry at idx {}!", class_index));
                 };
-                let Some(class_name) = self.get_utf8(name_index) else {
-                    continue;
-                };
+                let class_name = self
+                    .get_utf8(name_index)
+                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
                 let ConstPoolEntry::NameAndType {
                     name_index: method_name_index,
                     descriptor_index,
@@ -63,19 +68,23 @@ impl Consumer for Class {
                     println!("Not a NameAndType entry at idx {}!", name_type_index);
                     continue;
                 };
-                let Some(method_name) = self.get_utf8(method_name_index) else {
+                let method_name = self
+                    .get_utf8(method_name_index)
+                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
+                let method_descriptor = self
+                    .get_utf8(descriptor_index)
+                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
+                if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
                     continue;
-                };
-                let Some(method_descriptor) = self.get_utf8(descriptor_index) else {
-                    continue;
-                };
-                imports.insert(format!(
-                    "{}#{}{}",
-                    class_name, method_name, method_descriptor,
-                ));
+                }
+                required_methods
+                    .push((class_name, format!("{}{}", method_name, method_descriptor)));
             }
         }
-        Ok(imports)
+        Ok(ClassRequirements {
+            classes: class_imports,
+            methods: required_methods,
+        })
     }
 }
 
@@ -95,7 +104,6 @@ impl Provider for Class {
                     result.insert(method_signature);
                 }
                 let result = (class_name, result);
-                trace!("{:?}", result);
                 return Ok(result);
             }
             debug!("Skipping module-info.class");
@@ -111,7 +119,6 @@ fn collect_methods(
 ) -> Result<HashSet<String>, String> {
     let mut result = HashSet::new();
     if let Some(super_class) = classes.get(super_class_name) {
-        trace!("Super class: {}", super_class_name);
         for method_signature in super_class.get_methods()? {
             result.insert(method_signature);
         }
@@ -128,12 +135,90 @@ fn collect_methods(
 }
 
 pub fn check_classes(classes: &HashMap<String, Class>, parallel: bool) -> Option<HashSet<String>> {
-    Some(
-        get_provided(classes, parallel)
-            .into_keys()
-            .map(|s| s.to_owned())
-            .collect(),
-    )
+    let provided = get_provided(classes, parallel);
+    let (mut required_classes, mut required_methods) = get_consumed(classes, parallel);
+    for (class, methods) in provided {
+        required_classes.remove(class);
+        let Some(required_methods) = required_methods.get_mut(class) else {
+            continue;
+        };
+        methods.iter().for_each(|s| {
+            required_methods.remove(s);
+        });
+    }
+    let mut result = HashSet::new();
+    for class in required_classes {
+        if class.starts_with("java") {
+            continue;
+        }
+        result.insert(class.to_owned());
+    }
+    for (class, method) in required_methods {
+        method.iter().for_each(|m| {
+            if !class.starts_with("java") {
+                result.insert(format!("{}#{}", class, m));
+            }
+        });
+    }
+    Some(result)
+}
+
+fn get_consumed(
+    classes: &HashMap<String, Class>,
+    parallel: bool,
+) -> (HashSet<&str>, HashMap<&str, HashSet<String>>) {
+    if parallel {
+        classes
+            .par_iter()
+            .map(|(_, class)| class.get_consumed().unwrap())
+            .fold(
+                || (HashSet::new(), HashMap::new()),
+                |mut a, b| {
+                    a.0.extend(b.classes);
+                    for (c, m) in b.methods {
+                        match a.1.entry(c) {
+                            Entry::Vacant(e) => {
+                                let mut set = HashSet::new();
+                                set.insert(m);
+                                e.insert(set);
+                            }
+                            Entry::Occupied(mut e) => {
+                                e.get_mut().insert(m);
+                            }
+                        };
+                    }
+                    a
+                },
+            )
+            .reduce(
+                || (HashSet::new(), HashMap::new()),
+                |mut a, b| {
+                    a.0.extend(b.0);
+                    a.1.extend(b.1);
+                    a
+                },
+            )
+    } else {
+        classes
+            .iter()
+            .map(|(_, class)| class.get_consumed().unwrap())
+            .fold((HashSet::new(), HashMap::new()), |mut a, b| {
+                a.0.extend(b.classes);
+                for (c, m) in b.methods {
+                    match a.1.entry(c) {
+                        Entry::Vacant(e) => {
+                            let mut set = HashSet::new();
+                            set.insert(m);
+                            e.insert(set);
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().insert(m);
+                        }
+                    };
+                }
+                a
+            })
+    }
 }
 
 fn get_provided(

@@ -416,6 +416,7 @@ dependencies = [
  "clap",
  "env_logger",
  "java_class",
+ "log",
  "reference_checker",
 ]
 
