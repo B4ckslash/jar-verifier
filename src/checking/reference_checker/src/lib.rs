@@ -108,19 +108,8 @@ impl Provider for Class {
                 .ok_or("Class name index is invalid!".to_owned())?;
             if class_name != "module-info" {
                 debug!("Processing class {}", class_name);
-                for method_signature in collect_methods(self)? {
+                for method_signature in collect_methods(class_name, classes)? {
                     result.insert(method_signature);
-                }
-                if let &ConstPoolEntry::Class { name_index } =
-                    &self.const_pool[&self.super_class_idx]
-                {
-                    let super_class_name = self
-                        .get_utf8(&name_index)
-                        .ok_or("Class name index is invalid!".to_owned())?;
-                    for super_method_signature in collect_super_methods(super_class_name, classes)?
-                    {
-                        result.insert(super_method_signature);
-                    }
                 }
                 let result = ClassProvides {
                     class_name,
@@ -139,28 +128,14 @@ impl Provider for Class {
     }
 }
 
-fn collect_methods(class: &Class) -> Result<HashSet<String>, String> {
-    let mut result = HashSet::new();
-    for method_info in &class.methods {
-        let method_name = class
-            .get_utf8(&method_info.name_index)
-            .ok_or("Method name index is invalid!".to_owned())?;
-        let method_descriptor = class
-            .get_utf8(&method_info.descriptor_index)
-            .ok_or("Method descriptor index is invalid!".to_owned())?;
-        result.insert(format!("{}{}", method_name, method_descriptor,));
-    }
-    Ok(result)
-}
-
-fn collect_super_methods(
+fn collect_methods(
     super_class_name: &str,
     classes: &HashMap<String, Class>,
 ) -> Result<HashSet<String>, String> {
     let mut result = HashSet::new();
     if let Some(super_class) = classes.get(super_class_name) {
         trace!("Super class: {}", super_class_name);
-        for method_signature in collect_methods(super_class)? {
+        for method_signature in super_class.get_methods()? {
             result.insert(method_signature);
         }
         if let ConstPoolEntry::Class { name_index } =
@@ -169,7 +144,7 @@ fn collect_super_methods(
             let super_class_name = super_class
                 .get_utf8(&name_index)
                 .ok_or("Class name index is invalid!".to_owned())?;
-            result.extend(collect_super_methods(super_class_name, classes)?)
+            result.extend(collect_methods(super_class_name, classes)?)
         }
     }
     Ok(result)

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use binrw::prelude::*;
@@ -52,6 +52,19 @@ impl Class {
             warn!("Not a UTF8 entry at idx {}!", index);
             None
         }
+    }
+    pub fn get_methods(&self) -> Result<HashSet<String>, String> {
+        let mut result = HashSet::new();
+        for method_info in &self.methods {
+            let method_name = self
+                .get_utf8(&method_info.name_index)
+                .ok_or("Method name index is invalid!".to_owned())?;
+            let method_descriptor = self
+                .get_utf8(&method_info.descriptor_index)
+                .ok_or("Method descriptor index is invalid!".to_owned())?;
+            result.insert(format!("{}{}", method_name, method_descriptor,));
+        }
+        Ok(result)
     }
 }
 
