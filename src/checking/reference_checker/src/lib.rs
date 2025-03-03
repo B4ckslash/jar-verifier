@@ -3,35 +3,18 @@ use std::collections::{HashMap, HashSet};
 use java_class::java_class::{Class, ConstPoolEntry};
 use log::{debug, trace};
 use once_cell::sync::Lazy;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use regex::Regex;
-
-#[derive(Debug)]
-struct ClassProvides<'a> {
-    class_name: &'a str,
-    methods: HashSet<String>,
-}
-
-impl<'a> From<ClassProvides<'a>> for HashSet<String> {
-    fn from(value: ClassProvides<'a>) -> Self {
-        let mut result = HashSet::with_capacity(value.methods.len() + 1);
-        result.insert(value.class_name.to_owned());
-        for method in value.methods {
-            result.insert(format!("{}#{}", value.class_name, method));
-        }
-        result
-    }
-}
 
 trait Consumer {
     fn get_consumed(&self, classes: &HashMap<String, Class>) -> Result<HashSet<String>, String>;
 }
 
 trait Provider {
-    fn get_provided<'a>(
-        &'a self,
+    fn get_provided(
+        &self,
         classes: &HashMap<String, Class>,
-    ) -> Result<ClassProvides<'a>, String>;
+    ) -> Result<(&str, HashSet<String>), String>;
 }
 
 fn get_references(candidate: &str) -> HashSet<String> {
@@ -97,10 +80,10 @@ impl Consumer for Class {
 }
 
 impl Provider for Class {
-    fn get_provided<'a>(
-        &'a self,
+    fn get_provided(
+        &self,
         classes: &HashMap<String, Class>,
-    ) -> Result<ClassProvides<'a>, String> {
+    ) -> Result<(&str, HashSet<String>), String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self
@@ -111,18 +94,12 @@ impl Provider for Class {
                 for method_signature in collect_methods(class_name, classes)? {
                     result.insert(method_signature);
                 }
-                let result = ClassProvides {
-                    class_name,
-                    methods: result,
-                };
+                let result = (class_name, result);
                 trace!("{:?}", result);
                 return Ok(result);
             }
             debug!("Skipping module-info.class");
-            return Ok(ClassProvides {
-                class_name: "module-info",
-                methods: HashSet::new(),
-            });
+            return Ok(("module-info", HashSet::new()));
         }
         Err("This-class index is invalid!".to_owned())
     }
@@ -151,28 +128,39 @@ fn collect_methods(
 }
 
 pub fn check_classes(classes: &HashMap<String, Class>, parallel: bool) -> Option<HashSet<String>> {
+    Some(
+        get_provided(classes, parallel)
+            .into_keys()
+            .map(|s| s.to_owned())
+            .collect(),
+    )
+}
+
+fn get_provided(
+    classes: &HashMap<String, Class>,
+    parallel: bool,
+) -> HashMap<&str, HashSet<String>> {
     if parallel {
-        let result = classes
+        classes
             .par_iter()
-            .flat_map(|(_, class)| {
-                HashSet::from(class.get_provided(classes).unwrap()).into_par_iter()
-            })
-            .fold(HashSet::new, |mut a, b| {
-                a.insert(b);
+            .map(|(_, class)| class.get_provided(classes).unwrap())
+            .fold(HashMap::new, |mut a, b| {
+                a.insert(b.0, b.1);
                 a
             })
-            .reduce(HashSet::new, |mut a, b| {
-                a.extend(b);
+            .reduce(HashMap::new, |mut a, b| {
+                b.into_iter().for_each(|(k, v)| {
+                    a.insert(k, v);
+                });
                 a
-            });
-        return Some(result);
+            })
+    } else {
+        classes
+            .iter()
+            .map(|(_, class)| class.get_provided(classes).unwrap())
+            .fold(HashMap::new(), |mut a, b| {
+                a.insert(b.0, b.1);
+                a
+            })
     }
-    let result = classes
-        .iter()
-        .flat_map(|(_, class)| HashSet::from(class.get_provided(classes).unwrap()).into_iter())
-        .fold(HashSet::new(), |mut a, b| {
-            a.insert(b);
-            a
-        });
-    Some(result)
 }

@@ -2,9 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{Cursor, Read},
-    iter,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use java_class::{Class, ConstPoolEntry};
