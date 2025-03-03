@@ -18,3 +18,4 @@ zip = { version = "2.2.2", default-features = false, features = [
   "zstd",
 ] }
 log = "0.4.26"
+rayon = "1.10.0"

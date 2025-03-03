@@ -380,6 +380,7 @@ dependencies = [
  "glob",
  "log",
  "modular-bitfield-msb",
+ "rayon",
  "shellexpand",
  "zip",
 ]

@@ -2,11 +2,14 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{Cursor, Read},
-    path::Path,
+    iter,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use java_class::{Class, ConstPoolEntry};
 use log::info;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
 pub mod error;
@@ -50,19 +53,39 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
     Ok(classes)
 }
 
-pub fn parse_classpath(cp: &str) -> Result<HashMap<String, Class>> {
-    let mut result = HashMap::new();
-    for element in cp.split(';') {
-        let element = shellexpand::full(element)
-            .unwrap_or_else(|_| panic!("Failed to expand path {}", element));
-        if element.contains('*') {
-            for entry in glob::glob(element.as_ref())? {
-                let path = entry?;
-                result.extend(read_zip_archive(path.as_path())?);
+pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class>> {
+    let split = cp.split(';');
+    let expanded = split
+        .map(|el| shellexpand::full(el).unwrap_or_else(|_| panic!("Failed to expand path {}", el)));
+    let globbed = expanded
+        .clone()
+        .filter_map(|el| {
+            if el.contains('*') {
+                Some(glob::glob(el.as_ref()).unwrap().map(|p| p.unwrap()))
+            } else {
+                None
             }
+        })
+        .flatten();
+    let concrete = expanded.filter_map(|el| {
+        if !el.contains('*') {
+            let mut p = PathBuf::new();
+            p.push(el.as_ref());
+            Some(p)
         } else {
-            result.extend(read_zip_archive(Path::new(element.as_ref()))?);
+            None
         }
-    }
+    });
+    let chained: Vec<PathBuf> = globbed.chain(concrete).collect();
+    let result = chained
+        .par_iter()
+        .map(|pb| read_zip_archive(pb.as_path()).unwrap())
+        .reduce(HashMap::new, |a, mut b| {
+            a.into_iter().for_each(|(k, v)| {
+                b.insert(k, v);
+            });
+            b
+        });
+
     Ok(result)
 }
