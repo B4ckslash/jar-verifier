@@ -40,7 +40,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
                     else {
                         continue;
                     };
-                    let Some(class_name) = class_parsed.get_utf8(name_index) else {
+                    let Ok(class_name) = class_parsed.get_utf8(name_index) else {
                         continue;
                     };
                     classes.insert(class_name.to_owned(), class_parsed);

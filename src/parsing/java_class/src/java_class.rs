@@ -45,23 +45,18 @@ impl Class {
         data.read_be().unwrap()
     }
 
-    pub fn get_utf8<'a>(&'a self, index: &u16) -> Option<&'a str> {
+    pub fn get_utf8<'a>(&'a self, index: &u16) -> Result<&'a str, String> {
         if let ConstPoolEntry::Utf8 { value } = &self.const_pool[index] {
-            Some(value.as_str())
+            Ok(value.as_str())
         } else {
-            warn!("Not a UTF8 entry at idx {}!", index);
-            None
+            Err(format!("Not a UTF8 entry at idx {}!", index))
         }
     }
     pub fn get_methods(&self) -> Result<HashSet<String>, String> {
         let mut result = HashSet::new();
         for method_info in &self.methods {
-            let method_name = self
-                .get_utf8(&method_info.name_index)
-                .ok_or("Method name index is invalid!".to_owned())?;
-            let method_descriptor = self
-                .get_utf8(&method_info.descriptor_index)
-                .ok_or("Method descriptor index is invalid!".to_owned())?;
+            let method_name = self.get_utf8(&method_info.name_index)?;
+            let method_descriptor = self.get_utf8(&method_info.descriptor_index)?;
             result.insert(format!("{}{}", method_name, method_descriptor,));
         }
         Ok(result)

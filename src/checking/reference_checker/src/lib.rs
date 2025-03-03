@@ -44,10 +44,7 @@ impl<'a> Consumer<'a> for Class {
         let mut required_methods = vec![];
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
-                class_imports.push(
-                    self.get_utf8(name_index)
-                        .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?,
-                );
+                class_imports.push(self.get_utf8(name_index)?);
             }
             if let (
                 _,
@@ -60,9 +57,7 @@ impl<'a> Consumer<'a> for Class {
                 let ConstPoolEntry::Class { name_index } = &self.const_pool[class_index] else {
                     return Err(format!("Not a class info entry at idx {}!", class_index));
                 };
-                let class_name = self
-                    .get_utf8(name_index)
-                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
+                let class_name = self.get_utf8(name_index)?;
                 let ConstPoolEntry::NameAndType {
                     name_index: method_name_index,
                     descriptor_index,
@@ -71,12 +66,8 @@ impl<'a> Consumer<'a> for Class {
                     println!("Not a NameAndType entry at idx {}!", name_type_index);
                     continue;
                 };
-                let method_name = self
-                    .get_utf8(method_name_index)
-                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
-                let method_descriptor = self
-                    .get_utf8(descriptor_index)
-                    .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?;
+                let method_name = self.get_utf8(method_name_index)?;
+                let method_descriptor = self.get_utf8(descriptor_index)?;
                 if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
                     continue;
                 }
@@ -98,9 +89,7 @@ impl Provider for Class {
     ) -> Result<(&str, HashSet<String>), String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
-            let class_name = self
-                .get_utf8(&name_index)
-                .ok_or("Class name index is invalid!".to_owned())?;
+            let class_name = self.get_utf8(&name_index)?;
             if class_name != "module-info" {
                 debug!("Processing class {}", class_name);
                 for method_signature in collect_methods(class_name, classes)? {
@@ -128,9 +117,7 @@ fn collect_methods(
         if let ConstPoolEntry::Class { name_index } =
             super_class.const_pool[&super_class.super_class_idx]
         {
-            let super_class_name = super_class
-                .get_utf8(&name_index)
-                .ok_or("Class name index is invalid!".to_owned())?;
+            let super_class_name = super_class.get_utf8(&name_index)?;
             result.extend(collect_methods(super_class_name, classes)?)
         }
     }
