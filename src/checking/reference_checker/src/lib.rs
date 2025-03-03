@@ -43,8 +43,11 @@ impl<'a> Consumer<'a> for Class {
         let mut class_imports = vec![];
         let mut required_methods = vec![];
         for cp_info in &self.const_pool {
-            if let (_, ConstPoolEntry::Utf8 { value }) = cp_info {
-                class_imports.extend(get_references(value));
+            if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
+                class_imports.push(
+                    self.get_utf8(name_index)
+                        .ok_or(format!("Failed to get Utf8 Entry at index {}", name_index))?,
+                );
             }
             if let (
                 _,
