@@ -33,8 +33,10 @@ fn read_classinfo(path: &str) -> Result<HashMap<String, Vec<String>>, error::Err
     for line in reader.lines() {
         let line = line?;
         if !line.starts_with("--") {
+            trace!("Java Class {} from classinfo", line);
             result.insert(line, vec![]);
         } else {
+            trace!("Java Class Method {} from classinfo", line);
             result.entry(line.clone()).and_modify(|vec| {
                 vec.push(
                     line.strip_prefix("--")

@@ -22,7 +22,7 @@ pub struct Class {
     #[br(temp)]
     iface_count: u16,
     #[br(count = iface_count)]
-    iface_indexes: Vec<u16>,
+    pub iface_indexes: Vec<u16>,
     #[br(temp)]
     fields_count: u16,
     #[br(count = fields_count)]

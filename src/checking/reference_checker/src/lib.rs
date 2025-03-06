@@ -1,7 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use java_class::java_class::{Class, ConstPoolEntry};
-use log::debug;
+use log::{debug, trace};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 struct ClassRequirements<'a> {
@@ -28,6 +28,7 @@ impl<'a> Consumer<'a> for Class {
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
                 class_imports.push(
+                    //remove array stuff around class definition
                     self.get_utf8(name_index)?
                         .trim_start_matches('[')
                         .trim_start_matches('L')
@@ -95,22 +96,36 @@ impl Provider for Class {
 }
 
 fn collect_methods(
-    super_class_name: &str,
+    class_name: &str,
     classes: &HashMap<String, Class>,
     java_classes: &HashMap<String, Vec<String>>,
 ) -> Result<HashSet<String>, String> {
     let mut result = HashSet::new();
-    if let Some(super_class) = classes.get(super_class_name) {
-        for method_signature in super_class.get_methods()? {
+    if let Some(current_class) = classes.get(class_name) {
+        trace!("Class {}", class_name);
+        for method_signature in current_class.get_methods()? {
             result.insert(method_signature);
         }
         if let ConstPoolEntry::Class { name_index } =
-            super_class.const_pool[&super_class.super_class_idx]
+            current_class.const_pool[&current_class.super_class_idx]
         {
-            let super_class_name = super_class.get_utf8(&name_index)?;
+            let super_class_name = current_class.get_utf8(&name_index)?;
             result.extend(collect_methods(super_class_name, classes, java_classes)?);
+            for iface_index in &current_class.iface_indexes {
+                let ConstPoolEntry::Class { name_index } = current_class.const_pool[iface_index]
+                else {
+                    continue;
+                };
+                result.extend(collect_methods(
+                    current_class.get_utf8(&name_index)?,
+                    classes,
+                    java_classes,
+                )?);
+            }
         }
-    } else if let Some(super_class_methods) = java_classes.get(super_class_name) {
+    } else if let Some(super_class_methods) = java_classes.get(class_name) {
+        trace!("Java Class {}", class_name);
+        trace!("Java Class Methods: {:?}", super_class_methods);
         result.extend(super_class_methods.iter().cloned());
     }
     Ok(result)
