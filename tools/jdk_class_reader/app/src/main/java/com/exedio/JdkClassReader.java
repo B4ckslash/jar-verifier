@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class App {
+public class JdkClassReader {
     public static void main(String[] args) {
         final String modulePath = args[0];
         try {
@@ -44,7 +44,7 @@ public class App {
     private static String convertMethod(final Method method) {
         final String name = method.getName();
         final String parameters = Arrays.stream(method.getParameterTypes())
-                .map(App::mapType)
+                .map(JdkClassReader::mapType)
                 .collect(Collectors.joining());
         final String returnType = mapType(method.getReturnType());
         return String.format("%s(%s)%s", name, parameters, returnType);
