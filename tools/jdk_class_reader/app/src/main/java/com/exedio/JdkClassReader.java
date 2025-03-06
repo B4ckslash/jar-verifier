@@ -34,10 +34,10 @@ public class JdkClassReader {
                 final Class<?> clazz = Class.forName(className.replace('/', '.'));
                 final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
                         .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
-                        .map(c -> String.format("  %s%n", getInternalRepresentation(c))).toList();
+                        .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
                 final List<String> methods = Arrays.stream(clazz.getDeclaredMethods())
                         .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
-                        .map(m -> String.format("  %s%n", getInternalRepresentation(m))).toList();
+                        .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
                 for (final String constructor : constructors) {
                     writer.write(constructor);
                 }
