@@ -6,6 +6,7 @@ package com.exedio;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -28,9 +29,13 @@ public class JdkClassReader {
                 try {
                     System.out.println(className);
                     final Class<?> clazz = Class.forName(className.replace('/', '.'));
+                    Arrays.stream(clazz.getDeclaredConstructors())
+                            .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
+                            .map(c -> String.format("  %s", getInternalRepresentation(c)))
+                            .forEach(System.out::println);
                     Arrays.stream(clazz.getDeclaredMethods())
                             .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
-                            .map(m -> String.format("  %s", convertMethod(m)))
+                            .map(m -> String.format("  %s", getInternalRepresentation(m)))
                             .forEach(System.out::println);
                 } catch (ClassNotFoundException e) {
                     System.err.println("Class not found: " + className);
@@ -41,12 +46,12 @@ public class JdkClassReader {
         }
     }
 
-    private static String convertMethod(final Method method) {
-        final String name = method.getName();
-        final String parameters = Arrays.stream(method.getParameterTypes())
+    private static String getInternalRepresentation(final Executable executable) {
+        final String name = executable instanceof Method ? executable.getName() : "<init>";
+        final String parameters = Arrays.stream(executable.getParameterTypes())
                 .map(JdkClassReader::mapType)
                 .collect(Collectors.joining());
-        final String returnType = mapType(method.getReturnType());
+        final String returnType = executable instanceof final Method m ? mapType(m.getReturnType()) : mapType(void.class);
         return String.format("%s(%s)%s", name, parameters, returnType);
     }
 
@@ -74,6 +79,9 @@ public class JdkClassReader {
         }
         if (boolean.class.equals(type)) {
             return "Z";
+        }
+        if (void.class.equals(type)) {
+            return "V";
         }
         if (type.isArray()) {
             return type.getName();
