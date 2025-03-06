@@ -17,6 +17,7 @@ trait Provider {
     fn get_provided(
         &self,
         classes: &HashMap<String, Class>,
+        java_classes: &HashMap<String, Vec<String>>,
     ) -> Result<(&str, HashSet<String>), String>;
 }
 
@@ -26,7 +27,12 @@ impl<'a> Consumer<'a> for Class {
         let mut required_methods = vec![];
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
-                class_imports.push(self.get_utf8(name_index)?);
+                class_imports.push(
+                    self.get_utf8(name_index)?
+                        .trim_start_matches('[')
+                        .trim_start_matches('L')
+                        .trim_end_matches(';'),
+                );
             }
             if let (
                 _,
@@ -68,13 +74,14 @@ impl Provider for Class {
     fn get_provided(
         &self,
         classes: &HashMap<String, Class>,
+        java_classes: &HashMap<String, Vec<String>>,
     ) -> Result<(&str, HashSet<String>), String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
             if class_name != "module-info" {
                 debug!("Processing class {}", class_name);
-                for method_signature in collect_methods(class_name, classes)? {
+                for method_signature in collect_methods(class_name, classes, java_classes)? {
                     result.insert(method_signature);
                 }
                 let result = (class_name, result);
@@ -90,6 +97,7 @@ impl Provider for Class {
 fn collect_methods(
     super_class_name: &str,
     classes: &HashMap<String, Class>,
+    java_classes: &HashMap<String, Vec<String>>,
 ) -> Result<HashSet<String>, String> {
     let mut result = HashSet::new();
     if let Some(super_class) = classes.get(super_class_name) {
@@ -100,14 +108,20 @@ fn collect_methods(
             super_class.const_pool[&super_class.super_class_idx]
         {
             let super_class_name = super_class.get_utf8(&name_index)?;
-            result.extend(collect_methods(super_class_name, classes)?)
+            result.extend(collect_methods(super_class_name, classes, java_classes)?);
         }
+    } else if let Some(super_class_methods) = java_classes.get(super_class_name) {
+        result.extend(super_class_methods.iter().cloned());
     }
     Ok(result)
 }
 
-pub fn check_classes(classes: &HashMap<String, Class>, parallel: bool) -> Option<HashSet<String>> {
-    let provided = get_provided(classes, parallel);
+pub fn check_classes(
+    classes: &HashMap<String, Class>,
+    parallel: bool,
+    java_classes: &HashMap<String, Vec<String>>,
+) -> Option<HashSet<String>> {
+    let provided = get_provided(classes, parallel, java_classes);
     let (mut required_classes, mut required_methods) = get_consumed(classes, parallel);
     for (class, methods) in provided {
         required_classes.remove(class);
@@ -120,7 +134,7 @@ pub fn check_classes(classes: &HashMap<String, Class>, parallel: bool) -> Option
     }
     let mut result = HashSet::new();
     for class in required_classes {
-        if class.starts_with("java") {
+        if java_classes.contains_key(class) {
             continue;
         }
         result.insert(class.to_owned());
@@ -193,14 +207,15 @@ fn get_consumed(
     }
 }
 
-fn get_provided(
-    classes: &HashMap<String, Class>,
+fn get_provided<'a>(
+    classes: &'a HashMap<String, Class>,
     parallel: bool,
-) -> HashMap<&str, HashSet<String>> {
+    java_classes: &HashMap<String, Vec<String>>,
+) -> HashMap<&'a str, HashSet<String>> {
     if parallel {
         classes
             .par_iter()
-            .map(|(_, class)| class.get_provided(classes).unwrap())
+            .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
             .fold(HashMap::new, |mut a, b| {
                 a.insert(b.0, b.1);
                 a
@@ -214,7 +229,7 @@ fn get_provided(
     } else {
         classes
             .iter()
-            .map(|(_, class)| class.get_provided(classes).unwrap())
+            .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
             .fold(HashMap::new(), |mut a, b| {
                 a.insert(b.0, b.1);
                 a

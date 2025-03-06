@@ -39,5 +39,6 @@ impl Display for Error {
 }
 
 define_errcodes![
+    IoError: std::io::Error,
     ParsingError: java_class::error::Error
 ];
