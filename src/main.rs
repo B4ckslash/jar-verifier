@@ -6,7 +6,7 @@ use args::Args;
 use clap::Parser;
 use env_logger::Env;
 use java_class::parse_classpath;
-use log::trace;
+use log::{debug, trace};
 use reference_checker::check_classes;
 
 fn main() -> Result<(), error::Error> {
@@ -22,7 +22,7 @@ fn main() -> Result<(), error::Error> {
         classes.len(),
         consumed.len()
     );
-    trace!("{:?}", consumed);
+    debug!("{:?}", consumed);
     Ok(())
 }
 
