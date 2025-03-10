@@ -27,5 +27,5 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = "com.exedio.JdkClassReader"
+    mainClass = "app.classreader.JdkClassReader"
 }
