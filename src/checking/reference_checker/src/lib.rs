@@ -6,7 +6,10 @@
 
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-use java_class::java_class::{Class, ConstPoolEntry};
+use java_class::{
+    classinfo::ClassInfo,
+    java_class::{Class, ConstPoolEntry},
+};
 use log::{debug, trace};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -23,7 +26,7 @@ trait Provider {
     fn get_provided(
         &self,
         classes: &HashMap<String, Class>,
-        java_classes: &HashMap<String, Vec<String>>,
+        java_classes: &HashMap<&str, ClassInfo>,
     ) -> Result<(&str, HashSet<String>), String>;
 }
 
@@ -81,7 +84,7 @@ impl Provider for Class {
     fn get_provided(
         &self,
         classes: &HashMap<String, Class>,
-        java_classes: &HashMap<String, Vec<String>>,
+        java_classes: &HashMap<&str, ClassInfo>,
     ) -> Result<(&str, HashSet<String>), String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
@@ -104,7 +107,7 @@ impl Provider for Class {
 fn collect_methods(
     class_name: &str,
     classes: &HashMap<String, Class>,
-    java_classes: &HashMap<String, Vec<String>>,
+    java_classes: &HashMap<&str, ClassInfo>,
 ) -> Result<HashSet<String>, String> {
     let mut result = HashSet::new();
     if let Some(current_class) = classes.get(class_name) {
@@ -129,10 +132,13 @@ fn collect_methods(
                 )?);
             }
         }
-    } else if let Some(super_class_methods) = java_classes.get(class_name) {
+    } else if let Some(super_class) = java_classes.get(class_name) {
         trace!("Java Class {}", class_name);
-        trace!("Java Class Methods: {:?}", super_class_methods);
-        result.extend(super_class_methods.iter().cloned());
+        trace!("Java Class Methods: {:?}", super_class.methods);
+        result.extend(super_class.methods.iter().map(|&s| s.to_owned()));
+        if let Some(super_class) = super_class.super_class {
+            result.extend(collect_methods(super_class, classes, java_classes)?);
+        }
     }
     Ok(result)
 }
@@ -140,7 +146,7 @@ fn collect_methods(
 pub fn check_classes(
     classes: &HashMap<String, Class>,
     parallel: bool,
-    java_classes: &HashMap<String, Vec<String>>,
+    java_classes: &HashMap<&str, ClassInfo>,
 ) -> Option<HashSet<String>> {
     let provided = get_provided(classes, parallel, java_classes);
     let (mut required_classes, mut required_methods) = get_consumed(classes, parallel);
@@ -231,7 +237,7 @@ fn get_consumed(
 fn get_provided<'a>(
     classes: &'a HashMap<String, Class>,
     parallel: bool,
-    java_classes: &HashMap<String, Vec<String>>,
+    java_classes: &HashMap<&str, ClassInfo>,
 ) -> HashMap<&'a str, HashSet<String>> {
     if parallel {
         classes

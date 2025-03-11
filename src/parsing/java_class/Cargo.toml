@@ -19,3 +19,4 @@ zip = { version = "2.2.2", default-features = false, features = [
 ] }
 log = "0.4.26"
 rayon = "1.10.0"
+nom = "8.0.0"

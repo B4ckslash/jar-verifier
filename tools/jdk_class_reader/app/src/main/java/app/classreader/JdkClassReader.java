@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.stream;
 
 public class JdkClassReader {
+
+    public static final String SEPARATOR = ":";
+
     public static void main(String[] args) {
         final String modulePath = args[0];
         final String outputPath = args[1];
@@ -32,15 +35,22 @@ public class JdkClassReader {
     private static void writeClassInfo(List<String> classes, OutputStreamWriter writer) throws IOException {
         for (final String className : classes) {
             try {
-                writer.write(className + System.lineSeparator());
-
                 final Class<?> clazz = Class.forName(className.replace('/', '.'));
+                final Class<?> superClass = clazz.getSuperclass();
                 final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
                         .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
                         .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
                 final List<String> methods = Arrays.stream(clazz.getDeclaredMethods())
                         .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
                         .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
+                writer.write(className);
+                if (superClass != null) {
+                    writer.write(SEPARATOR + superClass.getName().replace('.', '/'));
+                } else {
+                    writer.write(SEPARATOR + "null");
+                }
+                writer.write(SEPARATOR + (constructors.size() + methods.size()));
+                writer.write(System.lineSeparator());
                 for (final String constructor : constructors) {
                     writer.write(constructor);
                 }

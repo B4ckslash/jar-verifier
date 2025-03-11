@@ -6,19 +6,30 @@
 
 mod args;
 mod error;
-use std::{collections::HashMap, fs::File, io::BufRead, path::Path};
+use std::{
+    collections::HashMap,
+    fs::{read_to_string, File},
+    io::{BufRead, Read},
+    path::Path,
+};
 
 use args::Args;
 use clap::Parser;
 use env_logger::Env;
-use java_class::parse_classpath;
+use java_class::{
+    classinfo::{self, ClassInfo},
+    parse_classpath,
+};
 use log::{debug, trace};
 use reference_checker::check_classes;
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse();
-    let java_classes = read_classinfo(&args.jdk_classinfo)?;
+    debug!("Reading ClassInfo from {}", &args.jdk_classinfo);
+    let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
+    let java_classes = read_classinfo(&classinfo_data)?;
+    trace!("{:?}", java_classes);
     let classes = parse_classpath(&args.classpath, args.parallel)?;
     let consumed =
         check_classes(&classes, args.parallel, &java_classes).expect("Failed to get result");
@@ -32,25 +43,13 @@ fn main() -> Result<(), error::Error> {
     Ok(())
 }
 
-fn read_classinfo(path: &str) -> Result<HashMap<String, Vec<String>>, error::Error> {
-    let path = Path::new(path);
-    let reader = std::io::BufReader::new(File::open(path)?);
+fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> {
     let mut result = HashMap::new();
-    for line in reader.lines() {
-        let line = line?;
-        if !line.starts_with("--") {
-            trace!("Java Class {} from classinfo", line);
-            result.insert(line, vec![]);
-        } else {
-            trace!("Java Class Method {} from classinfo", line);
-            result.entry(line.clone()).and_modify(|vec| {
-                vec.push(
-                    line.strip_prefix("--")
-                        .expect("Method lines should be prefixed with '--'!")
-                        .to_owned(),
-                )
-            });
-        }
+    let java_classes =
+        classinfo::ClassInfo::from_string(data).expect("Failed to read classinfo file!");
+    for class_info in java_classes {
+        trace!("Converting {}", class_info.name);
+        result.insert(class_info.name, class_info);
     }
     Ok(result)
 }

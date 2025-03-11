@@ -16,6 +16,7 @@ use log::info;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
+pub mod classinfo;
 pub mod error;
 pub mod java_class;
 
