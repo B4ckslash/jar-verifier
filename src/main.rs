@@ -8,12 +8,7 @@
 
 mod args;
 mod error;
-use std::{
-    collections::HashMap,
-    fs::{read_to_string, File},
-    io::{BufRead, Read},
-    path::Path,
-};
+use std::collections::HashMap;
 
 use args::Args;
 use clap::Parser;

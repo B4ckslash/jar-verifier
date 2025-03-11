@@ -11,7 +11,6 @@ use std::io::{Read, Seek};
 
 use binrw::prelude::*;
 use binrw::BinReaderExt;
-use log::warn;
 use modular_bitfield_msb::prelude::*;
 
 #[binread]
