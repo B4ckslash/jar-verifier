@@ -17,13 +17,13 @@ use java_class::{
     classinfo::{self, ClassInfo},
     parse_classpath,
 };
-use log::{debug, trace};
+use log::{debug, info, trace};
 use reference_checker::check_classes;
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse();
-    debug!("Reading ClassInfo from {}", &args.jdk_classinfo);
+    info!("Reading ClassInfo from {}", &args.jdk_classinfo);
     let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
     let java_classes = read_classinfo(&classinfo_data)?;
     trace!("{:?}", java_classes);
