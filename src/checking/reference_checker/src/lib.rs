@@ -6,7 +6,10 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    hash::Hash,
+};
 
 use java_class::{
     classinfo::ClassInfo,
@@ -16,6 +19,7 @@ use log::{debug, trace};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 struct ClassRequirements<'a> {
+    name: &'a str,
     classes: Vec<&'a str>,
     methods: Vec<(&'a str, String)>,
 }
@@ -36,6 +40,7 @@ impl<'a> Consumer<'a> for Class {
     fn get_consumed(&'a self) -> Result<ClassRequirements<'a>, String> {
         let mut class_imports = vec![];
         let mut required_methods = vec![];
+        let this_name = self.get_name()?;
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
                 class_imports.push(
@@ -76,6 +81,7 @@ impl<'a> Consumer<'a> for Class {
             }
         }
         Ok(ClassRequirements {
+            name: this_name,
             classes: class_imports,
             methods: required_methods,
         })
@@ -145,92 +151,168 @@ fn collect_methods(
     Ok(result)
 }
 
-pub fn check_classes(
-    classes: &HashMap<String, Class>,
+#[derive(Debug, Eq, Clone)]
+pub struct ClassDependencies<'a> {
+    name: &'a str,
+    classes: HashSet<&'a str>,
+    methods: HashMap<&'a str, HashSet<String>>,
+}
+
+impl PartialOrd for ClassDependencies<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        self.name.lt(other.name)
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        self.name.le(other.name)
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        self.name.gt(other.name)
+    }
+
+    fn ge(&self, other: &Self) -> bool {
+        self.name.ge(other.name)
+    }
+}
+
+impl Ord for ClassDependencies<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(other.name)
+    }
+}
+
+impl Hash for ClassDependencies<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(self.name.as_bytes());
+    }
+}
+
+impl PartialEq for ClassDependencies<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
+    fn from(val: ClassRequirements<'a>) -> Self {
+        let mut methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
+        let mut classes = HashSet::new();
+        classes.extend(val.classes);
+        for (class, method) in val.methods {
+            match methods.entry(class) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().insert(method);
+                }
+                Entry::Vacant(entry) => {
+                    let mut set = HashSet::new();
+                    set.insert(method);
+                    entry.insert(set);
+                }
+            };
+        }
+        ClassDependencies {
+            name: val.name,
+            classes,
+            methods,
+        }
+    }
+}
+
+impl<'a> ClassDependencies<'a> {
+    fn remove_class(&mut self, class: &str) {
+        self.classes.remove(class);
+    }
+
+    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashSet<String>)
+    where
+        'a: 'b,
+    {
+        if let Entry::Occupied(mut e) = self.methods.entry(class) {
+            let value = e.get_mut();
+            for method in methods {
+                value.remove(method);
+            }
+        }
+        self.methods.retain(|_, set| !set.is_empty());
+    }
+
+    fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
+        self.classes.retain(|name| !java_classes.contains_key(name));
+        self.methods.retain(|&class, _| !class.starts_with("java"));
+    }
+
+    fn is_empty(&self) -> bool {
+        self.classes.is_empty() && self.methods.is_empty()
+    }
+
+    pub fn format(&self) -> String {
+        let mut result = self.name.to_owned();
+        result.push('\n');
+        for class in &self.classes {
+            result.push_str(format!("Class {}", class).as_str());
+            result.push('\n');
+        }
+        for (class, methods) in &self.methods {
+            for method in methods {
+                result.push_str(format!("Method {}#{}", class, method).as_str());
+                result.push('\n');
+            }
+        }
+        result
+    }
+}
+
+pub fn check_classes<'a>(
+    classes: &'a HashMap<String, Class>,
     parallel: bool,
     java_classes: &HashMap<&str, ClassInfo>,
-) -> Option<HashSet<String>> {
+) -> Option<HashSet<ClassDependencies<'a>>> {
     let provided = get_provided(classes, parallel, java_classes);
-    let (mut required_classes, mut required_methods) = get_consumed(classes, parallel);
+    let mut dependencies: Vec<ClassDependencies<'a>> = Vec::new();
+    dependencies.extend(get_consumed(classes, parallel));
+    let mut dependencies: Vec<ClassDependencies<'a>> = dependencies
+        .iter_mut()
+        .map(|d| {
+            d.remove_java_classes_and_methods(java_classes);
+            d.to_owned()
+        })
+        .collect();
     for (class, methods) in provided {
-        required_classes.remove(class);
-        let Some(required_methods) = required_methods.get_mut(class) else {
-            continue;
-        };
-        methods.iter().for_each(|s| {
-            required_methods.remove(s);
-        });
-    }
-    let mut result = HashSet::new();
-    for class in required_classes {
-        if java_classes.contains_key(class) {
-            continue;
+        for dep in dependencies.iter_mut() {
+            dep.remove_class(class);
+            dep.remove_methods(class, &methods);
         }
-        result.insert(class.to_owned());
     }
-    for (class, method) in required_methods {
-        method.iter().for_each(|m| {
-            if !class.starts_with("java") {
-                result.insert(format!("{}#{}", class, m));
-            }
-        });
-    }
+    dependencies.retain(|dep| !dep.is_empty());
+    let mut result = HashSet::new();
+    result.extend(dependencies);
     Some(result)
 }
 
-fn get_consumed(
-    classes: &HashMap<String, Class>,
-    parallel: bool,
-) -> (HashSet<&str>, HashMap<&str, HashSet<String>>) {
+fn get_consumed(classes: &HashMap<String, Class>, parallel: bool) -> HashSet<ClassDependencies> {
     if parallel {
         classes
             .par_iter()
-            .map(|(_, class)| class.get_consumed().unwrap())
-            .fold(
-                || (HashSet::new(), HashMap::new()),
-                |mut a, b| {
-                    a.0.extend(b.classes);
-                    for (c, m) in b.methods {
-                        match a.1.entry(c) {
-                            Entry::Vacant(e) => {
-                                let mut set = HashSet::new();
-                                set.insert(m);
-                                e.insert(set);
-                            }
-                            Entry::Occupied(mut e) => {
-                                e.get_mut().insert(m);
-                            }
-                        };
-                    }
-                    a
-                },
-            )
-            .reduce(
-                || (HashSet::new(), HashMap::new()),
-                |mut a, b| {
-                    a.0.extend(b.0);
-                    a.1.extend(b.1);
-                    a
-                },
-            )
+            .map(|(_, class)| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
+            .fold(HashSet::new, |mut a, b| {
+                a.insert(b);
+                a
+            })
+            .reduce(HashSet::new, |mut a, b| {
+                a.extend(b);
+                a
+            })
     } else {
         classes
             .iter()
-            .map(|(_, class)| class.get_consumed().unwrap())
-            .fold((HashSet::new(), HashMap::new()), |mut a, b| {
-                a.0.extend(b.classes);
-                for (c, m) in b.methods {
-                    match a.1.entry(c) {
-                        Entry::Vacant(e) => {
-                            let mut set = HashSet::new();
-                            set.insert(m);
-                            e.insert(set);
-                        }
-                        Entry::Occupied(mut e) => {
-                            e.get_mut().insert(m);
-                        }
-                    };
-                }
+            .map(|(_, class)| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
+            .fold(HashSet::new(), |mut a, b| {
+                a.insert(b);
                 a
             })
     }

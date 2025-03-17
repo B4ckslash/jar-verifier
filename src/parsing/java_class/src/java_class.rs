@@ -68,6 +68,17 @@ impl Class {
         }
         Ok(result)
     }
+
+    pub fn get_name(&self) -> Result<&str, String> {
+        let this_class = &self.const_pool[&self.this_class_idx];
+        let ConstPoolEntry::Class { name_index } = this_class else {
+            return Err(format!(
+                "Not a Class entry at index {}",
+                self.this_class_idx
+            ));
+        };
+        self.get_utf8(name_index)
+    }
 }
 
 /*

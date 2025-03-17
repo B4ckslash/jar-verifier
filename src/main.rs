@@ -18,7 +18,7 @@ use java_class::{
     parse_classpath,
 };
 use log::{debug, info, trace};
-use reference_checker::check_classes;
+use reference_checker::{check_classes, ClassDependencies};
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -30,14 +30,25 @@ fn main() -> Result<(), error::Error> {
     let classes = parse_classpath(&args.classpath, args.parallel)?;
     let consumed =
         check_classes(&classes, args.parallel, &java_classes).expect("Failed to get result");
+    let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
+    sorted.extend(consumed);
+    sorted.sort();
     println!(
         "Classpath: {} \n Class count {} \n Consume count: {:?}",
         &args.classpath,
         classes.len(),
-        consumed.len()
+        sorted.len()
     );
-    debug!("{:?}", consumed);
+    debug!("{}", format(sorted));
     Ok(())
+}
+
+fn format(dep: Vec<ClassDependencies>) -> String {
+    let mut result = String::with_capacity(dep.capacity());
+    for d in dep {
+        result.push_str(d.format().as_str());
+    }
+    result
 }
 
 fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> {
