@@ -16,7 +16,7 @@ use java_class::{
     java_class::{Class, ConstPoolEntry},
 };
 use log::{debug, trace};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
 
 struct ClassRequirements<'a> {
     name: &'a str,
@@ -225,6 +225,7 @@ impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
 
 impl<'a> ClassDependencies<'a> {
     fn remove_class(&mut self, class: &str) {
+        trace!("Removing class {} from {}", class, self.name);
         self.classes.remove(class);
     }
 
@@ -232,6 +233,7 @@ impl<'a> ClassDependencies<'a> {
     where
         'a: 'b,
     {
+        trace!("Removing methods from {}", self.name);
         if let Entry::Occupied(mut e) = self.methods.entry(class) {
             let value = e.get_mut();
             for method in methods {
@@ -282,10 +284,28 @@ pub fn check_classes<'a>(
             d.to_owned()
         })
         .collect();
-    for (class, methods) in provided {
+    debug!(
+        "Provided size {} | Dependencies count {}",
+        provided.capacity(),
+        dependencies.capacity()
+    );
+    if parallel {
+        dependencies.par_iter_mut().for_each(|dep| {
+            for (class, methods) in &provided {
+                if dep.classes.contains(class) {
+                    dep.remove_class(class);
+                    dep.remove_methods(class, methods);
+                }
+            }
+        });
+    } else {
         for dep in dependencies.iter_mut() {
-            dep.remove_class(class);
-            dep.remove_methods(class, &methods);
+            for (class, methods) in &provided {
+                if dep.classes.contains(class) {
+                    dep.remove_class(class);
+                    dep.remove_methods(class, &methods);
+                }
+            }
         }
     }
     dependencies.retain(|dep| !dep.is_empty());
