@@ -17,34 +17,40 @@ use java_class::{
     classinfo::{self, ClassInfo},
     parse_classpath,
 };
-use log::{debug, info, trace};
+use log::{info, trace};
 use reference_checker::{check_classes, ClassDependencies};
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse();
-    info!("Reading ClassInfo from {}", &args.jdk_classinfo);
-    let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
-    let java_classes = read_classinfo(&classinfo_data)?;
-    trace!("{:?}", java_classes);
+    info!("JAR verifier {}", env!("CARGO_PKG_VERSION"));
     info!("Running with {} threads", args.threads);
+    info!("Path {}", args.classpath);
     let parallel = args.threads > 1;
     if parallel {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.threads)
             .build_global()?;
     }
+
+    info!("Reading ClassInfo from {}", &args.jdk_classinfo);
+    let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
+    let java_classes = read_classinfo(&classinfo_data)?;
+    trace!("{:?}", java_classes);
+
+    info!("Starting processing...");
     let classes = parse_classpath(&args.classpath, parallel)?;
     let consumed = check_classes(&classes, parallel, &java_classes).expect("Failed to get result");
+    info!("Finished.");
+    info!(
+        "Class count {} | Classes with unmet requirements: {}",
+        classes.len(),
+        consumed.len()
+    );
+
     let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
     sorted.extend(consumed);
     sorted.sort();
-    debug!(
-        "Classpath: {} \n Class count {} \n Consume count: {:?}",
-        &args.classpath,
-        classes.len(),
-        sorted.len()
-    );
     if let Some(path) = args.output_file {
         write_output(&path, &format(sorted))?;
     } else {
@@ -54,6 +60,7 @@ fn main() -> Result<(), error::Error> {
 }
 
 fn write_output(path: &str, content: &str) -> Result<(), error::Error> {
+    info!("Writing results to {}", path);
     let mut outfile = File::options()
         .write(true)
         .create(true)
