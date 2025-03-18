@@ -38,18 +38,22 @@ trait Provider {
 
 impl<'a> Consumer<'a> for Class {
     fn get_consumed(&'a self) -> Result<ClassRequirements<'a>, String> {
+        static PRIMITIVES: [&str; 8] = ["B", "C", "D", "F", "I", "J", "S", "Z"];
+
         let mut class_imports = vec![];
         let mut required_methods = vec![];
         let this_name = self.get_name()?;
         for cp_info in &self.const_pool {
             if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
-                class_imports.push(
-                    //remove array stuff around class definition
-                    self.get_utf8(name_index)?
-                        .trim_start_matches('[')
-                        .trim_start_matches('L')
-                        .trim_end_matches(';'),
-                );
+                //remove array stuff around class definition
+                let trimmed = self
+                    .get_utf8(name_index)?
+                    .trim_start_matches('[')
+                    .trim_start_matches('L')
+                    .trim_end_matches(';');
+                if !PRIMITIVES.contains(&trimmed) {
+                    class_imports.push(trimmed);
+                }
             }
             if let (
                 _,
@@ -256,11 +260,13 @@ impl<'a> ClassDependencies<'a> {
         let mut result = self.name.to_owned();
         result.push('\n');
         for class in &self.classes {
+            result.push('\t');
             result.push_str(format!("Class {}", class).as_str());
             result.push('\n');
         }
         for (class, methods) in &self.methods {
             for method in methods {
+                result.push('\t');
                 result.push_str(format!("Method {}#{}", class, method).as_str());
                 result.push('\n');
             }
