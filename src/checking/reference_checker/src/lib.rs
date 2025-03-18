@@ -259,13 +259,19 @@ impl<'a> ClassDependencies<'a> {
     pub fn format(&self) -> String {
         let mut result = self.name.to_owned();
         result.push('\n');
-        for class in &self.classes {
+        let mut sorted: Vec<&&str> = self.classes.iter().collect();
+        sorted.sort();
+        for class in sorted {
             result.push('\t');
             result.push_str(format!("Class {}", class).as_str());
             result.push('\n');
         }
-        for (class, methods) in &self.methods {
-            for method in methods {
+        let mut sorted: Vec<(&&str, &HashSet<String>)> = self.methods.iter().collect();
+        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        for (class, methods) in sorted {
+            let mut sorted: Vec<&String> = methods.iter().collect();
+            sorted.sort();
+            for method in sorted {
                 result.push('\t');
                 result.push_str(format!("Method {}#{}", class, method).as_str());
                 result.push('\n');
