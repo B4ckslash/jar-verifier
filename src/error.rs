@@ -48,5 +48,6 @@ impl Display for Error {
 
 define_errcodes![
     IoError: std::io::Error,
-    ParsingError: java_class::error::Error
+    ParsingError: java_class::error::Error,
+    ThreadingError: rayon::ThreadPoolBuildError
 ];

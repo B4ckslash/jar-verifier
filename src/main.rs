@@ -27,9 +27,15 @@ fn main() -> Result<(), error::Error> {
     let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
     let java_classes = read_classinfo(&classinfo_data)?;
     trace!("{:?}", java_classes);
-    let classes = parse_classpath(&args.classpath, args.parallel)?;
-    let consumed =
-        check_classes(&classes, args.parallel, &java_classes).expect("Failed to get result");
+    info!("Running with {} threads", args.threads);
+    let parallel = args.threads > 1;
+    if parallel {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()?;
+    }
+    let classes = parse_classpath(&args.classpath, parallel)?;
+    let consumed = check_classes(&classes, parallel, &java_classes).expect("Failed to get result");
     let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
     sorted.extend(consumed);
     sorted.sort();

@@ -11,13 +11,13 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about)]
 pub struct Args {
-    ///Classpath of JARs to be checked
+    ///Classpath of JARs to be checked.
     pub classpath: String,
-    ///A file listing the available classes and methods of the relevant JDK
+    ///A file listing the available classes and methods of the relevant JDK.
     pub jdk_classinfo: String,
-    ///Whether the program runs in parallel
-    #[arg(short, long, default_value_t = false)]
-    pub parallel: bool,
+    ///The number of threads to use.
+    #[arg(short, long, default_value_t = 1usize)]
+    pub threads: usize,
     ///The output file path. Prints to stdout if not set.
     #[arg(short, long)]
     pub output_file: Option<String>,
