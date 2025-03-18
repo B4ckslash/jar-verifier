@@ -18,4 +18,7 @@ pub struct Args {
     ///Whether the program runs in parallel
     #[arg(short, long, default_value_t = false)]
     pub parallel: bool,
+    ///The output file path. Prints to stdout if not set.
+    #[arg(short, long)]
+    pub output_file: Option<String>,
 }

@@ -8,7 +8,7 @@
 
 mod args;
 mod error;
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::File, io::Write};
 
 use args::Args;
 use clap::Parser;
@@ -33,13 +33,27 @@ fn main() -> Result<(), error::Error> {
     let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
     sorted.extend(consumed);
     sorted.sort();
-    println!(
+    debug!(
         "Classpath: {} \n Class count {} \n Consume count: {:?}",
         &args.classpath,
         classes.len(),
         sorted.len()
     );
-    debug!("{}", format(sorted));
+    if let Some(path) = args.output_file {
+        write_output(&path, &format(sorted))?;
+    } else {
+        println!("{}", format(sorted));
+    }
+    Ok(())
+}
+
+fn write_output(path: &str, content: &str) -> Result<(), error::Error> {
+    let mut outfile = File::options()
+        .write(true)
+        .create(true)
+        .append(false)
+        .open(path)?;
+    outfile.write_all(content.as_bytes())?;
     Ok(())
 }
 
