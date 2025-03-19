@@ -102,14 +102,14 @@ impl Provider for Class {
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
             if class_name != "module-info" {
-                debug!("Processing class {}", class_name);
+                trace!("Processing class {}", class_name);
                 for method_signature in collect_methods(class_name, classes, java_classes)? {
                     result.insert(method_signature);
                 }
                 let result = (class_name, result);
                 return Ok(result);
             }
-            debug!("Skipping module-info.class");
+            trace!("Skipping module-info.class");
             return Ok(("module-info", HashSet::new()));
         }
         Err("This-class index is invalid!".to_owned())
