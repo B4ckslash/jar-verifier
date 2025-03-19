@@ -33,8 +33,13 @@ fn main() -> Result<(), error::Error> {
             .build_global()?;
     }
 
-    info!("Reading ClassInfo from {}", &args.jdk_classinfo);
-    let classinfo_data = std::fs::read_to_string(&args.jdk_classinfo)?;
+    #[cfg(feature = "embedded_classinfo")]
+    let classinfo_data = include_str!("../data/17.classinfo").to_owned();
+    #[cfg(not(feature = "embedded_classinfo"))]
+    let classinfo_data = {
+        info!("Reading ClassInfo from {}", &args.jdk_classinfo);
+        std::fs::read_to_string(&args.jdk_classinfo)?
+    };
     let java_classes = read_classinfo(&classinfo_data)?;
     trace!("{:?}", java_classes);
 

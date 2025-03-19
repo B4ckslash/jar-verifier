@@ -9,11 +9,20 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(version, about)]
+#[cfg_attr(
+    feature = "embedded_classinfo",
+    command(
+        version,
+        about,
+        long_about = env!("CARGO_PKG_DESCRIPTION").to_owned() + "\nCompiled with embedded class information"
+    )
+)]
+#[cfg_attr(not(feature = "embedded_classinfo"), command(version, about))]
 pub struct Args {
     ///Classpath of JARs to be checked.
     pub classpath: String,
     ///A file listing the available classes and methods of the relevant JDK.
+    #[cfg(not(feature = "embedded_classinfo"))]
     pub jdk_classinfo: String,
     ///The number of threads to use.
     #[arg(short, long, default_value_t = 1usize)]
