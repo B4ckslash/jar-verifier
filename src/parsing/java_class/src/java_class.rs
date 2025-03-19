@@ -17,8 +17,8 @@ use modular_bitfield_msb::prelude::*;
 #[derive(Debug)]
 #[br(magic = 0xCAFEBABEu32)]
 pub struct Class {
-    min_ver: u16,
-    maj_ver: u16,
+    _min_ver: u16,
+    _maj_ver: u16,
     #[br(temp)]
     const_pool_count: u16,
     #[br(parse_with = parse_const_pool, args(const_pool_count))]
@@ -33,7 +33,7 @@ pub struct Class {
     #[br(temp)]
     fields_count: u16,
     #[br(count = fields_count)]
-    fields: Vec<FieldInfo>,
+    _fields: Vec<FieldInfo>,
     #[br(temp)]
     methods_count: u16,
     #[br(count = methods_count)]
@@ -99,29 +99,29 @@ impl Class {
 #[br(map = Self::from_bytes)]
 pub struct ClassFlags {
     #[skip(setters)]
-    module: bool,
+    _module: bool,
     #[skip(setters)]
-    is_enum: bool,
+    _is_enum: bool,
     #[skip(setters)]
-    annotation: bool,
+    _annotation: bool,
     #[skip(setters)]
-    synthetic: bool,
+    _synthetic: bool,
     #[skip]
     __: B1,
     #[skip(setters)]
-    is_abstract: bool,
+    _is_abstract: bool,
     #[skip(setters)]
-    interface: bool,
+    _interface: bool,
     #[skip]
     __: B3,
     #[skip(setters)]
-    is_super: bool,
+    _is_super: bool,
     #[skip(setters)]
-    is_final: bool,
+    _is_final: bool,
     #[skip]
     __: B3,
     #[skip(setters)]
-    public: bool,
+    _public: bool,
 }
 
 fn read_utf8_lossy(data: Vec<u8>) -> String {
@@ -208,25 +208,25 @@ pub enum ConstPoolEntry {
 #[binread]
 #[derive(Debug)]
 pub struct FieldInfo {
-    flags: u16, //bitfield
-    name_index: u16,
-    descriptor_index: u16,
+    _flags: u16, //bitfield
+    _name_index: u16,
+    _descriptor_index: u16,
     #[br(temp)]
     attributes_count: u16,
     #[br(count = attributes_count)]
-    attributes: Vec<AttributeInfo>,
+    _attributes: Vec<AttributeInfo>,
 }
 
 #[binread]
 #[derive(Debug)]
 pub struct MethodInfo {
-    flags: MethodFlags,
+    _flags: MethodFlags,
     pub name_index: u16,
     pub descriptor_index: u16,
     #[br(temp)]
     attributes_count: u16,
     #[br(count = attributes_count)]
-    attributes: Vec<AttributeInfo>,
+    _attributes: Vec<AttributeInfo>,
 }
 
 /*
@@ -251,50 +251,42 @@ pub struct MethodFlags {
     #[skip]
     __: B3,
     #[skip(setters)]
-    synthetic: bool,
+    _synthetic: bool,
 
     #[skip(setters)]
-    is_strict: bool,
+    _is_strict: bool,
     #[skip(setters)]
-    is_abstract: bool,
+    _is_abstract: bool,
     #[skip]
     __: B1,
     #[skip(setters)]
-    is_native: bool,
+    _is_native: bool,
 
     #[skip(setters)]
-    has_varargs: bool,
+    _has_varargs: bool,
     #[skip(setters)]
-    is_bridge: bool,
+    _is_bridge: bool,
     #[skip(setters)]
-    is_synchronized: bool,
+    _is_synchronized: bool,
     #[skip(setters)]
-    is_final: bool,
+    _is_final: bool,
 
     #[skip(setters)]
-    is_static: bool,
+    _is_static: bool,
     #[skip(setters)]
-    is_protected: bool,
+    _is_protected: bool,
     #[skip(setters)]
-    is_private: bool,
+    _is_private: bool,
     #[skip(setters)]
-    is_public: bool,
+    _is_public: bool,
 }
 
 #[binread]
 #[derive(Debug)]
 pub struct AttributeInfo {
-    name_index: u16,
+    _name_index: u16,
     #[br(temp)]
     length: u32,
     #[br(count = length)]
-    data: Vec<u8>,
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert!(true);
-    }
+    _data: Vec<u8>,
 }
