@@ -21,3 +21,7 @@ members = ["src/parsing/java_class", "src/checking/reference_checker"]
 
 [features]
 embedded_classinfo = []
+
+[profile.release]
+lto = true
+strip = true
