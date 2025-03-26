@@ -315,7 +315,7 @@ pub fn check_classes<'a>(
             for (class, methods) in &provided {
                 if dep.classes.contains(class) {
                     dep.remove_class(class);
-                    dep.remove_methods(class, &methods);
+                    dep.remove_methods(class, methods);
                 }
             }
         }

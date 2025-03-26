@@ -69,7 +69,7 @@ fn write_output(path: &str, content: &str) -> Result<(), error::Error> {
     let mut outfile = File::options()
         .write(true)
         .create(true)
-        .append(false)
+        .truncate(true)
         .open(path)?;
     outfile.write_all(content.as_bytes())?;
     Ok(())
