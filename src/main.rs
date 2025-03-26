@@ -93,3 +93,34 @@ fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> 
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn execute_and_compare() {
+        let pkg_path = env!("CARGO_MANIFEST_DIR");
+
+        let mut classinfo_path = pkg_path.to_owned();
+        classinfo_path.push_str("/data/17.classinfo");
+        let classinfo_path = classinfo_path.as_str();
+        let classinfo = std::fs::read_to_string(classinfo_path).unwrap();
+        let java_classes = read_classinfo(&classinfo).unwrap();
+
+        let mut jar_path = pkg_path.to_owned();
+        jar_path.push_str("/testdata/test_jar.jar");
+        let classes = parse_classpath(jar_path.as_str(), false).unwrap();
+
+        let consumed = check_classes(&classes, false, &java_classes).expect("Failed to get result");
+
+        let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
+        sorted.extend(consumed);
+        sorted.sort();
+
+        let formatted = format(sorted);
+        let mut compare_path = pkg_path.to_owned();
+        compare_path.push_str("/testdata/requirements.txt");
+        let reference = std::fs::read_to_string(compare_path.as_str()).unwrap();
+        assert_eq!(formatted, reference);
+    }
+}

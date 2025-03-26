@@ -1,0 +1,6 @@
+org/example/LibraryWithDependencies
+	Class org/apache/commons/math3/random/MersenneTwister
+	Class org/apache/commons/math3/random/UniformRandomGenerator
+	Method org/apache/commons/math3/random/MersenneTwister#<init>()V
+	Method org/apache/commons/math3/random/UniformRandomGenerator#<init>(Lorg/apache/commons/math3/random/RandomGenerator;)V
+	Method org/apache/commons/math3/random/UniformRandomGenerator#nextNormalizedDouble()D
