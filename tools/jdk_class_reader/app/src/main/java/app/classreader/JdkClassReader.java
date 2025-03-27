@@ -155,7 +155,7 @@ public class JdkClassReader {
             return "V";
         }
         if (type.isArray()) {
-            return type.getName();
+            return type.getName().replace('.', '/');
         }
         return "L" + type.getName().replace('.', '/') + ";";
     }
