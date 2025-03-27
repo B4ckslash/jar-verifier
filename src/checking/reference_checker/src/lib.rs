@@ -256,7 +256,8 @@ impl<'a> ClassDependencies<'a> {
 
     fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
         self.classes.retain(|name| !java_classes.contains_key(name));
-        self.methods.retain(|&class, _| !class.starts_with("java"));
+        self.methods
+            .retain(|&class, _| !java_classes.contains_key(class));
     }
 
     fn is_empty(&self) -> bool {
