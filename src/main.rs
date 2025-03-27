@@ -17,8 +17,8 @@ use java_class::{
     classinfo::{self, ClassInfo},
     parse_classpath,
 };
-use log::{info, trace};
-use reference_checker::{check_classes, ClassDependencies};
+use log::{debug, info, trace};
+use reference_checker::{ClassDependencies, check_classes};
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -91,6 +91,7 @@ fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> 
         trace!("Converting {}", class_info.name);
         result.insert(class_info.name, class_info);
     }
+    debug!("ClassInfo: {} Java classes loaded", result.len());
     Ok(result)
 }
 

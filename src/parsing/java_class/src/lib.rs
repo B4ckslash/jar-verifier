@@ -84,6 +84,7 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
         }
     });
     let chained: Vec<PathBuf> = globbed.chain(concrete).collect();
+    debug!("{} JAR files found.", chained.len());
     let result = if parallel {
         chained
             .par_iter()
