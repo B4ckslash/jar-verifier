@@ -7,7 +7,7 @@
 */
 
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     hash::Hash,
 };
 
@@ -237,11 +237,18 @@ impl<'a> ClassDependencies<'a> {
     where
         'a: 'b,
     {
-        trace!("Removing methods from {}", self.name);
+        trace!(
+            "Removing methods {:?} of class {} from {}",
+            methods, class, self.name
+        );
         if let Entry::Occupied(mut e) = self.methods.entry(class) {
             let value = e.get_mut();
             for method in methods {
-                value.remove(method);
+                trace!("Trying to remove {}#{}", class, method.as_str());
+                if value.remove(method) {
+                    trace!("Removed {}#{}", class, method.as_str());
+                    trace!("Remaining methods for {}: {:?}", class, value);
+                }
             }
         }
         self.methods.retain(|_, set| !set.is_empty());
