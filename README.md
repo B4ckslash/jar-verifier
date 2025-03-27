@@ -51,6 +51,25 @@ A class information file for Java SE 17 is available in the `data/` directory.
 This is also the one that gets embedded when the feature flag is specified
 during build.
 
+### Output
+
+The output can be roughly described by the following grammar:
+
+```
+ClassRequirements := ClassName Requirement+
+Requirement       := <TAB>(ClassImport|MethodImport)
+ClassImport       := "Class " ClassName
+MethodImport      := "Method " MethodSpec
+MethodSpec        := ClassName "#" MethodName MethodDescriptor
+```
+
+`ClassName`, `MethodName` and `MethodDescriptor` are described by the JVM
+class file format spec:
+[Names](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.2)
+[MethodDescriptor](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.3.3)
+
+An example of the output can be found in the [test data](./testdata/requirements.txt).
+
 ## Creating .classinfo files
 
 There is a tool to create `.classinfo` files in the `tools/jdk_class_reader` directory
