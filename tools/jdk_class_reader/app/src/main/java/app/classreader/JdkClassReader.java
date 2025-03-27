@@ -12,8 +12,7 @@ import java.io.*;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.stream;
@@ -21,6 +20,8 @@ import static java.util.Arrays.stream;
 public class JdkClassReader {
 
     public static final String SEPARATOR = ":";
+
+    private static final ModuleLayer BOOT = ModuleLayer.boot();
 
     public static void main(String[] args) {
         final String modulePath = args[0];
@@ -35,44 +36,79 @@ public class JdkClassReader {
     }
 
     private static void writeClassInfo(List<String> classes, OutputStreamWriter writer) throws IOException {
+        Class<?> clazz;
         for (final String className : classes) {
             try {
-                final Class<?> clazz = Class.forName(className.replace('/', '.'));
-                final Class<?> superClass = clazz.getSuperclass();
-                final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
-                        .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
-                        .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
-                final List<String> methods = Arrays.stream(clazz.getDeclaredMethods())
-                        .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
-                        .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
-                writer.write(className);
-                if (superClass != null) {
-                    writer.write(SEPARATOR + superClass.getName().replace('.', '/'));
-                } else {
-                    writer.write(SEPARATOR + "null");
-                }
-                writer.write(SEPARATOR + (constructors.size() + methods.size()));
-                writer.write(System.lineSeparator());
-                for (final String constructor : constructors) {
-                    writer.write(constructor);
-                }
-                for (final String method : methods) {
-                    writer.write(method);
-                }
+                clazz = Class.forName(className.replace('/', '.'));
             } catch (ClassNotFoundException e) {
-                System.err.println("Class not found: " + className);
+                System.err.println("Class not found: " + className + "! Skipping...");
+                continue;
+            } catch (Throwable t) {
+                System.err.println("Failed to load class " + className + ": " + t);
+                continue;
+            }
+            if (!clazz.getModule().isExported(clazz.getPackageName())
+                    || !(Modifier.isPublic(clazz.getModifiers())
+                    || Modifier.isProtected(clazz.getModifiers()))) {
+                continue;
+            }
+            final Class<?> superClass = clazz.getSuperclass();
+            final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
+                    .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
+                    .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
+            final List<String> methods = Arrays.stream(clazz.getDeclaredMethods())
+                    .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
+                    .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
+            writer.write(className);
+            if (superClass != null) {
+                writer.write(SEPARATOR + superClass.getName().replace('.', '/'));
+            } else {
+                writer.write(SEPARATOR + "null");
+            }
+            writer.write(SEPARATOR + (constructors.size() + methods.size()));
+            writer.write(System.lineSeparator());
+            for (final String constructor : constructors) {
+                writer.write(constructor);
+            }
+            for (final String method : methods) {
+                writer.write(method);
             }
         }
+    }
+
+    private static String getPackageName(final String className) {
+        return className.substring(0, className.lastIndexOf('/'));
     }
 
     private static List<String> getClassNamesFromModuleFile(String modulePath) throws IOException {
         final Process jimage = new ProcessBuilder("jimage", "list", modulePath).start();
         final BufferedReader reader = new BufferedReader(new InputStreamReader(jimage.getInputStream()));
-        return reader.lines()
-                .map(String::trim)
-                .filter(line -> line.endsWith(".class") && line.startsWith("java"))
-                .map(line -> line.replace(".class", ""))
-                .toList();
+        final List<String> classes = new ArrayList<>(10_000);
+        String line = reader.readLine();
+        while (line != null) {
+            if (line.startsWith("Module: ")) {
+                final String moduleName = line.split(" ")[1].trim();
+                final Optional<Module> moduleOptional = BOOT.findModule(moduleName);
+                if (moduleOptional.isPresent()) {
+                    final Module module = moduleOptional.get();
+
+                    String contentLine = reader.readLine();
+                    while (contentLine != null && !contentLine.startsWith("Module: ")) {
+                        if (contentLine.endsWith(".class") && !contentLine.contains("module-info")) {
+                            final String packageName = getPackageName(contentLine).trim();
+                            if (module.isExported(packageName.replace('/', '.'))) {
+                                classes.add(contentLine.replace(".class", "").trim());
+                            }
+                        }
+                        contentLine = reader.readLine();
+                    }
+                    line = contentLine;
+                    continue;
+                }
+            }
+            line = reader.readLine();
+        }
+        return classes;
     }
 
     private static String getInternalRepresentation(final Executable executable) {
