@@ -44,7 +44,10 @@ impl<'a> Consumer<'a> for Class {
         let mut required_methods = vec![];
         let this_name = self.get_name()?;
         for cp_info in &self.const_pool {
-            if let (_, ConstPoolEntry::Class { name_index }) = cp_info {
+            if let (idx, ConstPoolEntry::Class { name_index }) = cp_info {
+                if !self.is_class_entry_used(idx) {
+                    continue;
+                }
                 //remove array stuff around class definition
                 let trimmed = self
                     .get_utf8(name_index)?

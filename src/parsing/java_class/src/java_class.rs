@@ -9,8 +9,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
-use binrw::prelude::*;
 use binrw::BinReaderExt;
+use binrw::prelude::*;
 use modular_bitfield_msb::prelude::*;
 
 #[binread]
@@ -78,6 +78,39 @@ impl Class {
             ));
         };
         self.get_utf8(name_index)
+    }
+
+    pub fn is_class_entry_used(&self, const_pool_idx: &u16) -> bool {
+        for entry in self.const_pool.values() {
+            match entry {
+                ConstPoolEntry::MethodRef {
+                    class_index,
+                    name_type_index: _,
+                } => {
+                    if class_index == const_pool_idx {
+                        return true;
+                    }
+                }
+                ConstPoolEntry::FieldRef {
+                    class_index,
+                    name_type_index: _,
+                } => {
+                    if class_index == const_pool_idx {
+                        return true;
+                    }
+                }
+                ConstPoolEntry::IfaceMethodRef {
+                    class_index,
+                    name_type_index: _,
+                } => {
+                    if class_index == const_pool_idx {
+                        return true;
+                    }
+                }
+                _ => (),
+            }
+        }
+        false
     }
 }
 
