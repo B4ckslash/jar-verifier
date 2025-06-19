@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "java_class"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "binrw",
  "glob",
@@ -602,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "reference_checker"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "binrw",
  "java_class",
