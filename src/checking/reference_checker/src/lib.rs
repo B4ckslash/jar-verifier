@@ -15,7 +15,7 @@ use java_class::{
     classinfo::ClassInfo,
     java_class::{Class, ConstPoolEntry},
 };
-use log::{debug, trace};
+use log::{debug, info, trace};
 use rayon::prelude::*;
 
 struct ClassRequirements<'a> {
@@ -297,6 +297,7 @@ pub fn check_classes<'a>(
     parallel: bool,
     java_classes: &HashMap<&str, ClassInfo>,
 ) -> Option<HashSet<ClassDependencies<'a>>> {
+    info!("Checking class dependencies");
     let provided = get_provided(classes, parallel, java_classes);
     let mut dependencies: Vec<ClassDependencies<'a>> = Vec::new();
     dependencies.extend(get_consumed(classes, parallel));
@@ -334,6 +335,10 @@ pub fn check_classes<'a>(
     dependencies.retain(|dep| !dep.is_empty());
     let mut result = HashSet::new();
     result.extend(dependencies);
+    info!(
+        "Finished. Classes with unmet dependencies: {}",
+        result.len()
+    );
     Some(result)
 }
 

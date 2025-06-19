@@ -45,16 +45,12 @@ fn main() -> Result<(), error::Error> {
 
     info!("Starting processing...");
     let classes = parse_classpath(&args.classpath, parallel)?;
-    let consumed = check_classes(&classes, parallel, &java_classes).expect("Failed to get result");
-    info!("Finished.");
-    info!(
-        "Class count {} | Classes with unmet requirements: {}",
-        classes.len(),
-        consumed.len()
-    );
+    let unmet_deps =
+        check_classes(&classes, parallel, &java_classes).expect("Failed to get result");
+    info!("Done.");
 
-    let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
-    sorted.extend(consumed);
+    let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(unmet_deps.capacity());
+    sorted.extend(unmet_deps);
     sorted.sort();
     if let Some(path) = args.output_file {
         write_output(&path, &format(sorted))?;

@@ -14,7 +14,7 @@ use std::{
 };
 
 use java_class::{Class, ConstPoolEntry};
-use log::debug;
+use log::{debug, info};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
@@ -61,6 +61,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
 }
 
 pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class>> {
+    info!("Processing class path");
     let split = cp.split(';');
     let expanded = split
         .map(|el| shellexpand::full(el).unwrap_or_else(|_| panic!("Failed to expand path {}", el)));
@@ -108,5 +109,6 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
             .unwrap_or(HashMap::new())
     };
 
+    info!("Finished. {} classes found.", result.len());
     Ok(result)
 }
