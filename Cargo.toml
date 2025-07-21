@@ -9,7 +9,7 @@ description = "Verifies JAR dependencies by checking their imported classes and 
 [dependencies]
 java_class = { path = "./src/parsing/java_class/" }
 reference_checker = { path = "./src/checking/reference_checker/" }
-binrw = "0.14.1"
+binrw = "0.15.0"
 env_logger = "0.11.6"
 log = { version = "0.4.26", features = ["release_max_level_debug"] }
 clap = { version = "4.5.31", features = ["derive"] }
