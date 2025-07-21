@@ -314,6 +314,8 @@ impl<'a> ClassDependencies<'a> {
         self.classes.retain(|name| !java_classes.contains_key(name));
         self.class_methods
             .retain(|&class, _| !java_classes.contains_key(class));
+        self.iface_methods
+            .retain(|&class, _| !java_classes.contains_key(class));
     }
 
     fn is_empty(&self) -> bool {
