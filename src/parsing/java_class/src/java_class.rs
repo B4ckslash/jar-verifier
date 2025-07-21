@@ -112,6 +112,14 @@ impl Class {
         }
         false
     }
+
+    pub fn is_interface(&self) -> bool {
+        self.flags._interface()
+    }
+
+    pub fn is_module(&self) -> bool {
+        self.flags._module()
+    }
 }
 
 /*

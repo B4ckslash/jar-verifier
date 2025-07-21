@@ -21,7 +21,8 @@ use rayon::prelude::*;
 struct ClassRequirements<'a> {
     name: &'a str,
     classes: Vec<&'a str>,
-    methods: Vec<(&'a str, String)>,
+    class_methods: Vec<(&'a str, String)>,
+    iface_methods: Vec<(&'a str, String)>,
 }
 
 trait Consumer<'a> {
@@ -33,7 +34,7 @@ trait Provider {
         &self,
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
-    ) -> Result<(&str, HashSet<String>), String>;
+    ) -> Result<Option<MethodProvider>, String>;
 }
 
 impl<'a> Consumer<'a> for Class {
@@ -41,7 +42,8 @@ impl<'a> Consumer<'a> for Class {
         static PRIMITIVES: [&str; 8] = ["B", "C", "D", "F", "I", "J", "S", "Z"];
 
         let mut class_imports = vec![];
-        let mut required_methods = vec![];
+        let mut required_class_methods = vec![];
+        let mut required_iface_methods = vec![];
         let this_name = self.get_name()?;
         for cp_info in &self.const_pool {
             if let (idx, ConstPoolEntry::Class { name_index }) = cp_info {
@@ -66,33 +68,61 @@ impl<'a> Consumer<'a> for Class {
                 },
             ) = cp_info
             {
-                let ConstPoolEntry::Class { name_index } = &self.const_pool[class_index] else {
-                    return Err(format!("Not a class info entry at idx {}!", class_index));
-                };
-                let class_name = self.get_utf8(name_index)?;
-                let ConstPoolEntry::NameAndType {
-                    name_index: method_name_index,
-                    descriptor_index,
-                } = &self.const_pool[name_type_index]
-                else {
-                    println!("Not a NameAndType entry at idx {}!", name_type_index);
-                    continue;
-                };
-                let method_name = self.get_utf8(method_name_index)?;
-                let method_descriptor = self.get_utf8(descriptor_index)?;
-                if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
-                    continue;
-                }
-                required_methods
-                    .push((class_name, format!("{}{}", method_name, method_descriptor)));
+                required_class_methods.push(process_method(class_index, name_type_index, self)?);
+                continue;
+            }
+            if let (
+                _,
+                ConstPoolEntry::IfaceMethodRef {
+                    class_index,
+                    name_type_index,
+                },
+            ) = cp_info
+            {
+                required_iface_methods.push(process_method(class_index, name_type_index, self)?);
+                continue;
             }
         }
         Ok(ClassRequirements {
             name: this_name,
             classes: class_imports,
-            methods: required_methods,
+            class_methods: required_class_methods,
+            iface_methods: required_iface_methods,
         })
     }
+}
+
+fn process_method<'a>(
+    class_index: &u16,
+    name_type_index: &u16,
+    class: &'a Class,
+) -> Result<(&'a str, String), String> {
+    let ConstPoolEntry::Class { name_index } = &class.const_pool[class_index] else {
+        return Err(format!("Not a class info entry at idx {}!", class_index));
+    };
+    let class_name = class.get_utf8(name_index)?;
+    let ConstPoolEntry::NameAndType {
+        name_index: method_name_index,
+        descriptor_index,
+    } = &class.const_pool[name_type_index]
+    else {
+        return Err(format!(
+            "Not a NameAndType entry at idx {}!",
+            name_type_index
+        ));
+    };
+    let method_name = class.get_utf8(method_name_index)?;
+    let method_descriptor = class.get_utf8(descriptor_index)?;
+    // if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
+    //     continue;
+    // }
+    Ok((class_name, format!("{}{}", method_name, method_descriptor)))
+}
+
+struct MethodProvider<'a> {
+    name: &'a str,
+    methods: HashSet<String>,
+    interface: bool,
 }
 
 impl Provider for Class {
@@ -100,20 +130,23 @@ impl Provider for Class {
         &self,
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
-    ) -> Result<(&str, HashSet<String>), String> {
+    ) -> Result<Option<MethodProvider>, String> {
         let mut result = HashSet::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
-            if class_name != "module-info" {
+            if !self.is_module() {
                 trace!("Processing class {}", class_name);
                 for method_signature in collect_methods(class_name, classes, java_classes)? {
                     result.insert(method_signature);
                 }
-                let result = (class_name, result);
-                return Ok(result);
+                return Ok(Some(MethodProvider {
+                    name: class_name,
+                    methods: result,
+                    interface: self.is_interface(),
+                }));
             }
             trace!("Skipping module-info.class");
-            return Ok(("module-info", HashSet::new()));
+            return Ok(None);
         }
         Err("This-class index is invalid!".to_owned())
     }
@@ -162,7 +195,8 @@ fn collect_methods(
 pub struct ClassDependencies<'a> {
     name: &'a str,
     classes: HashSet<&'a str>,
-    methods: HashMap<&'a str, HashSet<String>>,
+    class_methods: HashMap<&'a str, HashSet<String>>,
+    iface_methods: HashMap<&'a str, HashSet<String>>,
 }
 
 impl PartialOrd for ClassDependencies<'_> {
@@ -207,11 +241,24 @@ impl PartialEq for ClassDependencies<'_> {
 
 impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
     fn from(val: ClassRequirements<'a>) -> Self {
-        let mut methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
+        let mut class_methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
+        let mut iface_methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
         let mut classes = HashSet::new();
         classes.extend(val.classes);
-        for (class, method) in val.methods {
-            match methods.entry(class) {
+        for (class, method) in val.class_methods {
+            match class_methods.entry(class) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().insert(method);
+                }
+                Entry::Vacant(entry) => {
+                    let mut set = HashSet::new();
+                    set.insert(method);
+                    entry.insert(set);
+                }
+            };
+        }
+        for (class, method) in val.iface_methods {
+            match iface_methods.entry(class) {
                 Entry::Occupied(mut entry) => {
                     entry.get_mut().insert(method);
                 }
@@ -225,7 +272,8 @@ impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
         ClassDependencies {
             name: val.name,
             classes,
-            methods,
+            class_methods,
+            iface_methods,
         }
     }
 }
@@ -236,7 +284,7 @@ impl<'a> ClassDependencies<'a> {
         self.classes.remove(class);
     }
 
-    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashSet<String>)
+    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashSet<String>, iface: bool)
     where
         'a: 'b,
     {
@@ -244,7 +292,12 @@ impl<'a> ClassDependencies<'a> {
             "Removing methods {:?} of class {} from {}",
             methods, class, self.name
         );
-        if let Entry::Occupied(mut e) = self.methods.entry(class) {
+        let entry: Entry<'_, _, _> = if iface {
+            self.iface_methods.entry(class)
+        } else {
+            self.class_methods.entry(class)
+        };
+        if let Entry::Occupied(mut e) = entry {
             let value = e.get_mut();
             for method in methods {
                 trace!("Trying to remove {}#{}", class, method.as_str());
@@ -254,20 +307,20 @@ impl<'a> ClassDependencies<'a> {
                 }
             }
         }
-        self.methods.retain(|_, set| !set.is_empty());
+        self.class_methods.retain(|_, set| !set.is_empty());
     }
 
     fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
         self.classes.retain(|name| !java_classes.contains_key(name));
-        self.methods
+        self.class_methods
             .retain(|&class, _| !java_classes.contains_key(class));
     }
 
     fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.methods.is_empty()
+        self.classes.is_empty() && self.class_methods.is_empty()
     }
 
-    pub fn format(&self) -> String {
+    pub fn format(&'a self) -> String {
         let mut result = self.name.to_owned();
         result.push('\n');
         let mut sorted: Vec<&&str> = self.classes.iter().collect();
@@ -277,14 +330,23 @@ impl<'a> ClassDependencies<'a> {
             result.push_str(format!("Class {}", class).as_str());
             result.push('\n');
         }
-        let mut sorted: Vec<(&&str, &HashSet<String>)> = self.methods.iter().collect();
+        let mut sorted: Vec<(&&str, &HashSet<String>)> = self.class_methods.iter().collect();
         sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
-        for (class, methods) in sorted {
+        result.push_str(Self::methods_to_str(&sorted, "ClassMethod").as_str());
+        sorted = self.iface_methods.iter().collect();
+        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        result.push_str(Self::methods_to_str(&sorted, "IfaceMethod").as_str());
+        result
+    }
+
+    fn methods_to_str(sorted_methods: &Vec<(&&str, &'a HashSet<String>)>, prefix: &str) -> String {
+        let mut result: String = Default::default();
+        for (class, methods) in sorted_methods {
             let mut sorted: Vec<&String> = methods.iter().collect();
             sorted.sort();
             for method in sorted {
                 result.push('\t');
-                result.push_str(format!("Method {}#{}", class, method).as_str());
+                result.push_str(format!("{} {}#{}", prefix, class, method).as_str());
                 result.push('\n');
             }
         }
@@ -315,10 +377,10 @@ pub fn check_classes<'a>(
     );
     if parallel {
         dependencies.par_iter_mut().for_each(|dep| {
-            for (class, methods) in &provided {
+            for (class, method_provider) in &provided {
                 if dep.classes.contains(class) {
                     dep.remove_class(class);
-                    dep.remove_methods(class, methods);
+                    dep.remove_methods(class, &method_provider.methods, method_provider.interface);
                 }
             }
         });
@@ -327,7 +389,7 @@ pub fn check_classes<'a>(
             for (class, methods) in &provided {
                 if dep.classes.contains(class) {
                     dep.remove_class(class);
-                    dep.remove_methods(class, methods);
+                    dep.remove_methods(class, &methods.methods, methods.interface);
                 }
             }
         }
@@ -370,13 +432,15 @@ fn get_provided<'a>(
     classes: &'a HashMap<String, Class>,
     parallel: bool,
     java_classes: &HashMap<&str, ClassInfo>,
-) -> HashMap<&'a str, HashSet<String>> {
+) -> HashMap<&'a str, MethodProvider<'a>> {
     if parallel {
         classes
             .par_iter()
             .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
+            .filter(|opt| opt.is_some())
+            .map(|opt| opt.unwrap())
             .fold(HashMap::new, |mut a, b| {
-                a.insert(b.0, b.1);
+                a.insert(b.name, b);
                 a
             })
             .reduce(HashMap::new, |mut a, b| {
@@ -389,8 +453,10 @@ fn get_provided<'a>(
         classes
             .iter()
             .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
+            .filter(|opt| opt.is_some())
+            .map(|opt| opt.unwrap())
             .fold(HashMap::new(), |mut a, b| {
-                a.insert(b.0, b.1);
+                a.insert(b.name, b);
                 a
             })
     }
