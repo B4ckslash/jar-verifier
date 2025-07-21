@@ -10,9 +10,12 @@ package org.example;
 
 import org.apache.commons.math3.random.MersenneTwister;
 import org.apache.commons.math3.random.UniformRandomGenerator;
+import org.apache.commons.math3.distribution.RealDistribution;
+import org.apache.commons.math3.distribution.BetaDistribution;
 
 public class LibraryWithDependencies {
     public static final UniformRandomGenerator RAND = new UniformRandomGenerator(new MersenneTwister());
+    private static final RealDistribution distribution = new BetaDistribution(0.5d, 0.5d);
     private final String prefix;
 
     public LibraryWithDependencies() {
@@ -29,6 +32,6 @@ public class LibraryWithDependencies {
 
     public String generateNewId()
     {
-        return prefix + "--" + Double.toHexString(generateRandomDouble());
+        return prefix + "--" + Double.toHexString(generateRandomDouble()) + Double.toHexString(distribution.getNumericalMean());
     }
 }
