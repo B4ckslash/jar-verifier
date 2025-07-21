@@ -59,7 +59,7 @@ The output can be roughly described by the following grammar:
 ClassRequirements := ClassName Requirement+
 Requirement       := <TAB>(ClassImport|MethodImport)
 ClassImport       := "Class " ClassName
-MethodImport      := "Method " MethodSpec
+MethodImport      := ("ClassMethod "|"IfaceMethod ") MethodSpec
 MethodSpec        := ClassName "#" MethodName MethodDescriptor
 ```
 
