@@ -56,7 +56,7 @@ impl Class {
         if let ConstPoolEntry::Utf8 { value } = &self.const_pool[index] {
             Ok(value.as_str())
         } else {
-            Err(format!("Not a UTF8 entry at idx {}!", index))
+            Err(format!("Not a UTF8 entry at idx {index}!"))
         }
     }
     pub fn get_methods(&self) -> Result<HashSet<String>, String> {
@@ -64,7 +64,7 @@ impl Class {
         for method_info in &self.methods {
             let method_name = self.get_utf8(&method_info.name_index)?;
             let method_descriptor = self.get_utf8(&method_info.descriptor_index)?;
-            result.insert(format!("{}{}", method_name, method_descriptor,));
+            result.insert(format!("{method_name}{method_descriptor}"));
         }
         Ok(result)
     }
@@ -135,6 +135,7 @@ impl Class {
  * |1                  enum
  * 1                   module
  */
+#[allow(clippy::new_without_default)]
 #[bitfield(bytes = 2)]
 #[derive(Debug, BinRead)]
 #[br(map = Self::from_bytes)]

@@ -98,7 +98,7 @@ fn process_method<'a>(
     class: &'a Class,
 ) -> Result<(&'a str, String), String> {
     let ConstPoolEntry::Class { name_index } = &class.const_pool[class_index] else {
-        return Err(format!("Not a class info entry at idx {}!", class_index));
+        return Err(format!("Not a class info entry at idx {class_index}!"));
     };
     let class_name = class.get_utf8(name_index)?;
     let ConstPoolEntry::NameAndType {
@@ -106,17 +106,14 @@ fn process_method<'a>(
         descriptor_index,
     } = &class.const_pool[name_type_index]
     else {
-        return Err(format!(
-            "Not a NameAndType entry at idx {}!",
-            name_type_index
-        ));
+        return Err(format!("Not a NameAndType entry at idx {name_type_index}!"));
     };
     let method_name = class.get_utf8(method_name_index)?;
     let method_descriptor = class.get_utf8(descriptor_index)?;
     // if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
     //     continue;
     // }
-    Ok((class_name, format!("{}{}", method_name, method_descriptor)))
+    Ok((class_name, format!("{method_name}{method_descriptor}")))
 }
 
 struct MethodProvider<'a> {
@@ -329,7 +326,7 @@ impl<'a> ClassDependencies<'a> {
         sorted.sort();
         for class in sorted {
             result.push('\t');
-            result.push_str(format!("Class {}", class).as_str());
+            result.push_str(format!("Class {class}").as_str());
             result.push('\n');
         }
         let mut sorted: Vec<(&&str, &HashSet<String>)> = self.class_methods.iter().collect();
@@ -348,7 +345,7 @@ impl<'a> ClassDependencies<'a> {
             sorted.sort();
             for method in sorted {
                 result.push('\t');
-                result.push_str(format!("{} {}#{}", prefix, class, method).as_str());
+                result.push_str(format!("{prefix} {class}#{method}").as_str());
                 result.push('\n');
             }
         }
@@ -421,8 +418,8 @@ fn get_consumed(classes: &HashMap<String, Class>, parallel: bool) -> HashSet<Cla
             })
     } else {
         classes
-            .iter()
-            .map(|(_, class)| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
+            .values()
+            .map(|class| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
             .fold(HashSet::new(), |mut a, b| {
                 a.insert(b);
                 a
@@ -453,10 +450,8 @@ fn get_provided<'a>(
             })
     } else {
         classes
-            .iter()
-            .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
-            .filter(|opt| opt.is_some())
-            .map(|opt| opt.unwrap())
+            .values()
+            .filter_map(|class| class.get_provided(classes, java_classes).unwrap())
             .fold(HashMap::new(), |mut a, b| {
                 a.insert(b.name, b);
                 a
