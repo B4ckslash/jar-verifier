@@ -312,10 +312,16 @@ impl<'a> ClassDependencies<'a> {
 
     fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
         self.classes.retain(|name| !java_classes.contains_key(name));
-        self.class_methods
-            .retain(|&class, _| !java_classes.contains_key(class));
-        self.iface_methods
-            .retain(|&class, _| !java_classes.contains_key(class));
+        for (class_name, methods) in self.class_methods.iter_mut() {
+            if let Some(class) = java_classes.get(class_name) {
+                methods.retain(|method| !class.methods.contains(&method.as_str()));
+            }
+        }
+        for (iface_name, methods) in self.iface_methods.iter_mut() {
+            if let Some(iface) = java_classes.get(iface_name) {
+                methods.retain(|method| !iface.methods.contains(&method.as_str()));
+            }
+        }
     }
 
     fn is_empty(&self) -> bool {
