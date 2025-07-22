@@ -64,7 +64,7 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
     info!("Processing class path");
     let split = cp.split(';');
     let expanded = split
-        .map(|el| shellexpand::full(el).unwrap_or_else(|_| panic!("Failed to expand path {}", el)));
+        .map(|el| shellexpand::full(el).unwrap_or_else(|_| panic!("Failed to expand path {el}")));
     let globbed = expanded
         .clone()
         .filter_map(|el| {
