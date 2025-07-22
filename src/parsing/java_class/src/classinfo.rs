@@ -7,11 +7,11 @@
 */
 
 use nom::{
+    IResult, Parser,
     bytes::complete::{tag, take_till},
     character::complete::{char, line_ending, not_line_ending, usize},
-    multi::{many, many1},
+    multi::{many, many1, separated_list0},
     sequence::{preceded, terminated},
-    IResult, Parser,
 };
 
 use log::trace;
@@ -20,6 +20,7 @@ use log::trace;
 pub struct ClassInfo<'a> {
     pub name: &'a str,
     pub super_class: Option<&'a str>,
+    pub interfaces: Vec<&'a str>,
     pub methods: Vec<&'a str>,
 }
 
@@ -36,6 +37,7 @@ impl<'a> ClassInfo<'a> {
         let mut colon_terminated = terminated(take_till(|c| c == ':'), char(':'));
         let (remaining, class_name) = colon_terminated.parse(data)?;
         let (remaining, super_class) = colon_terminated.parse(remaining)?;
+        let (remaining, interfaces) = colon_terminated.parse(remaining)?;
         let (remaining, methods_count) = terminated(usize, line_ending).parse(remaining)?;
 
         trace!("Parsing {} methods", methods_count);
@@ -45,20 +47,21 @@ impl<'a> ClassInfo<'a> {
         )
         .parse(remaining)?;
         trace!(
-            "Parsed Class {} with super {} and methods {:?}",
-            class_name,
-            super_class,
-            methods
+            "Parsed Class {} with super {}, interfaces {}, and methods {:?}",
+            class_name, super_class, interfaces, methods
         );
         let super_class = match super_class {
-            "null" => None,
+            "" => None,
             s => Some(s),
         };
+        let (_, interfaces) =
+            separated_list0(char(','), take_till(|c| c == ',')).parse(interfaces)?;
         Ok((
             remaining,
             ClassInfo {
                 name: class_name,
                 super_class,
+                interfaces,
                 methods,
             },
         ))
