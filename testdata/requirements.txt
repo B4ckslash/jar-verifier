@@ -8,6 +8,4 @@ org/example/LibraryWithDependencies
 	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#<init>(Lorg/apache/commons/math3/random/RandomGenerator;)V
 	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#nextNormalizedDouble()D
 	IfaceMethod org/apache/commons/math3/distribution/RealDistribution#getNumericalMean()D
-org/example/LibraryWithoutDependencies
-	ClassMethod [Ljava/lang/String;#clone()Ljava/lang/Object;
 
