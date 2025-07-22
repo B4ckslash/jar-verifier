@@ -68,8 +68,10 @@ impl<'a> Consumer<'a> for Class {
                 },
             ) = cp_info
             {
-                required_class_methods.push(process_method(class_index, name_type_index, self)?);
-                continue;
+                match process_method(class_index, name_type_index, self)? {
+                    Some(res) => required_class_methods.push(res),
+                    None => continue,
+                }
             }
             if let (
                 _,
@@ -79,8 +81,10 @@ impl<'a> Consumer<'a> for Class {
                 },
             ) = cp_info
             {
-                required_iface_methods.push(process_method(class_index, name_type_index, self)?);
-                continue;
+                match process_method(class_index, name_type_index, self)? {
+                    Some(res) => required_iface_methods.push(res),
+                    None => continue,
+                }
             }
         }
         Ok(ClassRequirements {
@@ -96,7 +100,7 @@ fn process_method<'a>(
     class_index: &u16,
     name_type_index: &u16,
     class: &'a Class,
-) -> Result<(&'a str, String), String> {
+) -> Result<Option<(&'a str, String)>, String> {
     let ConstPoolEntry::Class { name_index } = &class.const_pool[class_index] else {
         return Err(format!("Not a class info entry at idx {class_index}!"));
     };
@@ -110,10 +114,13 @@ fn process_method<'a>(
     };
     let method_name = class.get_utf8(method_name_index)?;
     let method_descriptor = class.get_utf8(descriptor_index)?;
-    // if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
-    //     continue;
-    // }
-    Ok((class_name, format!("{method_name}{method_descriptor}")))
+    if method_name == "clone" && method_descriptor == "()Ljava/lang/Object;" {
+        return Ok(None);
+    }
+    Ok(Some((
+        class_name,
+        format!("{method_name}{method_descriptor}"),
+    )))
 }
 
 struct MethodProvider<'a> {
@@ -183,6 +190,9 @@ fn collect_methods(
         result.extend(super_class.methods.iter().map(|&s| s.to_owned()));
         if let Some(super_class) = super_class.super_class {
             result.extend(collect_methods(super_class, classes, java_classes)?);
+        }
+        for iface in &super_class.interfaces {
+            result.extend(collect_methods(iface, classes, java_classes)?);
         }
     }
     Ok(result)
@@ -281,6 +291,11 @@ impl<'a> ClassDependencies<'a> {
         self.classes.remove(class);
     }
 
+    fn clear_empty_deps(&mut self) {
+        self.class_methods.retain(|_, set| !set.is_empty());
+        self.iface_methods.retain(|_, set| !set.is_empty());
+    }
+
     fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashSet<String>, iface: bool)
     where
         'a: 'b,
@@ -304,19 +319,41 @@ impl<'a> ClassDependencies<'a> {
                 }
             }
         }
-        self.class_methods.retain(|_, set| !set.is_empty());
+        self.clear_empty_deps();
     }
 
     fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
         self.classes.retain(|name| !java_classes.contains_key(name));
-        self.class_methods
-            .retain(|&class, _| !java_classes.contains_key(class));
-        self.iface_methods
-            .retain(|&class, _| !java_classes.contains_key(class));
+        for (class_name, methods) in self.class_methods.iter_mut() {
+            methods.retain(|method| !Self::provides_method(class_name, method, java_classes));
+        }
+        for (iface_name, methods) in self.iface_methods.iter_mut() {
+            methods.retain(|method| !Self::provides_method(iface_name, method, java_classes));
+        }
+        self.clear_empty_deps();
+    }
+
+    fn provides_method(class: &str, method: &str, java_classes: &HashMap<&str, ClassInfo>) -> bool {
+        if let Some(class_info) = java_classes.get(class) {
+            if class_info.methods.contains(&method) {
+                return true;
+            }
+            if let Some(super_class) = class_info.super_class {
+                if Self::provides_method(super_class, method, java_classes) {
+                    return true;
+                }
+            }
+            for super_iface in &class_info.interfaces {
+                if Self::provides_method(super_iface, method, java_classes) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.class_methods.is_empty()
+        self.classes.is_empty() && self.class_methods.is_empty() && self.iface_methods.is_empty()
     }
 
     pub fn format(&'a self) -> String {

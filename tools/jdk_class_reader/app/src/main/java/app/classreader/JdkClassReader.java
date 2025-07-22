@@ -12,7 +12,10 @@ import java.io.*;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.stream;
@@ -53,6 +56,7 @@ public class JdkClassReader {
                 continue;
             }
             final Class<?> superClass = clazz.getSuperclass();
+            final Class<?>[] interfaces = clazz.getInterfaces();
             final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
                     .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
                     .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
@@ -60,11 +64,12 @@ public class JdkClassReader {
                     .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
                     .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
             writer.write(className);
+            writer.write(SEPARATOR);
             if (superClass != null) {
-                writer.write(SEPARATOR + superClass.getName().replace('.', '/'));
-            } else {
-                writer.write(SEPARATOR + "null");
+                writer.write(superClass.getName().replace('.', '/'));
             }
+            writer.write(SEPARATOR);
+            writer.write(stream(interfaces).map(c -> c.getName().replace('.', '/')).collect(Collectors.joining(",")));
             writer.write(SEPARATOR + (constructors.size() + methods.size()));
             writer.write(System.lineSeparator());
             for (final String constructor : constructors) {
