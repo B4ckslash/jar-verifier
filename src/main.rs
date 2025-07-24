@@ -94,14 +94,26 @@ fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> 
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
-    fn execute_and_compare() {
+    fn test_java_11() {
+        execute_and_compare(11);
+    }
+
+    #[test]
+    fn test_java_17() {
+        execute_and_compare(17);
+    }
+
+    #[test]
+    fn test_java_21() {
+        execute_and_compare(21);
+    }
+
+    fn execute_and_compare(version: u16) {
         let pkg_path = env!("CARGO_MANIFEST_DIR");
 
-        let mut classinfo_path = pkg_path.to_owned();
-        classinfo_path.push_str("/data/17.classinfo");
-        let classinfo_path = classinfo_path.as_str();
-        let classinfo = std::fs::read_to_string(classinfo_path).unwrap();
+        let classinfo = load_classinfo(pkg_path, version);
         let java_classes = read_classinfo(&classinfo).unwrap();
 
         let mut jar_path = pkg_path.to_owned();
@@ -119,5 +131,12 @@ mod test {
         compare_path.push_str("/testdata/requirements.txt");
         let reference = std::fs::read_to_string(compare_path.as_str()).unwrap();
         assert_eq!(formatted.trim(), reference.trim());
+    }
+
+    fn load_classinfo(pkg_path: &str, version: u16) -> String {
+        let mut classinfo_path = pkg_path.to_owned();
+        classinfo_path.push_str(format!("/data/{version}.classinfo").as_str());
+        let classinfo_path = classinfo_path.as_str();
+        std::fs::read_to_string(classinfo_path).unwrap()
     }
 }
