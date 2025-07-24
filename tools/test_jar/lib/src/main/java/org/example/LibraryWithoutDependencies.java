@@ -27,4 +27,10 @@ public class LibraryWithoutDependencies {
 
         return copy;
     }
+
+    public static void suspendThreadGroup_removedInJava21() {
+
+      final ThreadGroup group = new ThreadGroup("test");
+      group.allowThreadSuspension(true);
+    }
 }
