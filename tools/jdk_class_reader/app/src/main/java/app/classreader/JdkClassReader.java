@@ -13,7 +13,6 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -57,12 +56,12 @@ public class JdkClassReader {
             }
             final Class<?> superClass = clazz.getSuperclass();
             final Class<?>[] interfaces = clazz.getInterfaces();
-            final List<String> constructors = Arrays.stream(clazz.getDeclaredConstructors())
+            final List<String> constructors = stream(clazz.getDeclaredConstructors())
                     .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
-                    .map(c -> String.format("--%s%n", getInternalRepresentation(c))).toList();
-            final List<String> methods = Arrays.stream(clazz.getDeclaredMethods())
+                    .map(c -> String.format("--%s%n", getInternalRepresentation(c))).collect(Collectors.toList());
+            final List<String> methods = stream(clazz.getDeclaredMethods())
                     .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
-                    .map(m -> String.format("--%s%n", getInternalRepresentation(m))).toList();
+                    .map(m -> String.format("--%s%n", getInternalRepresentation(m))).collect(Collectors.toList());
             writer.write(className);
             writer.write(SEPARATOR);
             if (superClass != null) {
@@ -121,7 +120,7 @@ public class JdkClassReader {
         final String parameters = stream(executable.getParameterTypes())
                 .map(JdkClassReader::mapType)
                 .collect(Collectors.joining());
-        final String returnType = executable instanceof final Method m ? mapType(m.getReturnType()) : mapType(void.class);
+        final String returnType = executable instanceof Method ? mapType(((Method) executable).getReturnType()) : mapType(void.class);
         return String.format("%s(%s)%s", name, parameters, returnType);
     }
 
