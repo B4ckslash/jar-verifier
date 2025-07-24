@@ -8,6 +8,21 @@
 
 use clap::Parser;
 
+#[derive(Copy, Clone, Debug, clap::ValueEnum)]
+#[cfg(feature = "embedded_classinfo")]
+pub enum JdkVersion {
+    Jdk11 = 11,
+    Jdk17 = 17,
+    Jdk21 = 21,
+}
+
+#[cfg(feature = "embedded_classinfo")]
+impl JdkVersion {
+    pub fn numerical(&self) -> u16 {
+        *self as u16
+    }
+}
+
 #[derive(Parser, Debug)]
 #[cfg_attr(
     feature = "embedded_classinfo",
@@ -21,6 +36,10 @@ use clap::Parser;
 pub struct Args {
     ///Classpath of JARs to be checked.
     pub classpath: String,
+    ///Java version to check
+    #[cfg(feature = "embedded_classinfo")]
+    #[arg(short, long)]
+    pub java_version: JdkVersion,
     ///A file listing the available classes and methods of the relevant JDK.
     #[cfg(not(feature = "embedded_classinfo"))]
     pub jdk_classinfo: String,
