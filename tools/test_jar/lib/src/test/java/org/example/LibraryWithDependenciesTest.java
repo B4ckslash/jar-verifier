@@ -23,7 +23,8 @@ class LibraryWithDependenciesTest {
         library = new LibraryWithDependencies(TEST_PREFIX);
     }
 
-    void testGenerateNewId() {
+    @Test
+    void testGene1ateNewId() {
         final String newId = library.generateNewId();
         assertNotNull(newId);
         assertTrue(newId.startsWith(TEST_PREFIX));

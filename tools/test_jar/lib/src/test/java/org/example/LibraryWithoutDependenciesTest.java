@@ -45,4 +45,9 @@ class LibraryWithoutDependenciesTest {
         final String[][] result = LibraryWithoutDependencies.deepCopy(compare);
         assertArrayEquals(compare, result);
     }
+
+    @Test
+    void testThreadGroupSuspension() {
+        LibraryWithoutDependencies.suspendThreadGroup_removedInJava21();
+    }
 }

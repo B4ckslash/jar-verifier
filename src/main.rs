@@ -128,7 +128,7 @@ mod test {
 
         let formatted = format(sorted);
         let mut compare_path = pkg_path.to_owned();
-        compare_path.push_str("/testdata/requirements.txt");
+        compare_path.push_str(format!("/testdata/requirements_{version}.txt").as_str());
         let reference = std::fs::read_to_string(compare_path.as_str()).unwrap();
         assert_eq!(formatted.trim(), reference.trim());
     }
