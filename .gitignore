@@ -2,3 +2,5 @@
 perf.data
 perf.data.old
 massif.out.*
+ivy.xml.in
+build.rs
