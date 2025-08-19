@@ -334,6 +334,12 @@ impl<'a> ClassDependencies<'a> {
     }
 
     fn provides_method(class: &str, method: &str, java_classes: &HashMap<&str, ClassInfo>) -> bool {
+        if let Some(class_info) = java_classes.get("java/lang/Object")
+            && !method.contains("<init>")
+            && class_info.methods.contains(&method)
+        {
+            return true;
+        }
         if let Some(class_info) = java_classes.get(class) {
             if class_info.methods.contains(&method) {
                 return true;
