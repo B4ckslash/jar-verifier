@@ -54,8 +54,9 @@ impl<'a> ClassInfo<'a> {
             "" => None,
             s => Some(s),
         };
-        let (_, interfaces) =
+        let (_, mut interfaces) =
             separated_list0(char(','), take_till(|c| c == ',')).parse(interfaces)?;
+        interfaces.retain(|&s| !s.is_empty());
         Ok((
             remaining,
             ClassInfo {
