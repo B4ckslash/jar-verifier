@@ -140,22 +140,22 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_java_11() {
+    fn java_11() {
         execute_and_compare(11);
     }
 
     #[test]
-    fn test_java_17() {
+    fn java_17() {
         execute_and_compare(17);
     }
 
     #[test]
-    fn test_java_21() {
+    fn java_21() {
         execute_and_compare(21);
     }
 
     #[test]
-    fn test_java_25() {
+    fn java_25() {
         execute_and_compare(25);
     }
 
