@@ -6,7 +6,24 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
+
+#[derive(Debug)]
+pub enum ArgError {
+    IllegalCombination(String),
+}
+
+impl Display for ArgError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match *self {
+            ArgError::IllegalCombination(ref err) => {
+                write!(f, "{}: {}", stringify!(ArgError::IllegalCombination), err)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ArgError {}
 
 macro_rules! define_errcodes {
     [ $( $name:ident : $class:ty ),+ ] => {
@@ -26,28 +43,29 @@ impl Display for Error {
         }
     }
 }
-        impl std::error::Error for Error {
-            fn cause(&self) -> Option<&dyn std::error::Error> {
-                match *self {
-                    $(
-                        Error::$name(ref err) => Some(err),
-                    )+
-                }
-            }
+impl std::error::Error for Error {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        match *self {
+            $(
+                Error::$name(ref err) => Some(err),
+            )+
         }
+    }
+}
 
-        $(
-            impl From<$class> for Error {
-                fn from(e: $class) -> Self {
-                    Error::$name(e)
-                }
-            }
-        )+
-    };
+$(
+    impl From<$class> for Error {
+        fn from(e: $class) -> Self {
+            Error::$name(e)
+        }
+    }
+)+
+};
 }
 
 define_errcodes![
     Io: std::io::Error,
     Parsing: java_class::error::Error,
-    Threading: rayon::ThreadPoolBuildError
+    Threading: rayon::ThreadPoolBuildError,
+    Args: ArgError
 ];
