@@ -45,11 +45,9 @@ up the input.
 
 The output file given with the `-o` flag will be overwritten if it already exists.
 
-The `JDK_CLASSINFO` argument is not available when the executable was compiled with
-embedded class information.
-A class information file for Java SE 17 is available in the `data/` directory.
-This is also the one that gets embedded when the feature flag is specified
-during build.
+Class information files for OpenJDK 11, 17, 21, and 25 are available in the
+`data/` directory.
+These get embedded when the feature flag is specified during build.
 
 ### Output
 
@@ -68,7 +66,7 @@ class file format spec:
 [Names](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.2)
 [MethodDescriptor](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.3.3)
 
-An example of the output can be found in the [test data](./testdata/requirements.txt).
+An example of the output can be found in the [test data](./testdata/requirements_17.txt).
 
 ## Creating .classinfo files
 
