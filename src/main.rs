@@ -20,6 +20,8 @@ use java_class::{
 use log::{debug, info, trace};
 use reference_checker::{ClassDependencies, check_classes};
 
+use crate::error::ArgError;
+
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse();
@@ -36,27 +38,40 @@ fn main() -> Result<(), error::Error> {
     }
 
     #[cfg(feature = "embedded_classinfo")]
-    let classinfo_data: HashMap<u16, &'static str> = {
+    let embedded_classinfo: HashMap<u16, &'static str> = {
         let mut map = HashMap::new();
         map.insert(11, include_str!("../data/11.classinfo"));
         map.insert(17, include_str!("../data/17.classinfo"));
         map.insert(21, include_str!("../data/21.classinfo"));
         map
     };
+    #[cfg(feature = "embedded_classinfo")]
+    let classinfo_data = match args.jdk_classinfo {
+        Some(path) => {
+            info!("Reading ClassInfo from {}", path);
+            Some(std::fs::read_to_string(path)?)
+        }
+        None => {
+            #[cfg(feature = "embedded_classinfo")]
+            let loaded = load_embedded(&args, &embedded_classinfo);
+            #[cfg(not(feature = "embedded_classinfo"))]
+            let loaded = None;
+            loaded
+        }
+    };
     #[cfg(not(feature = "embedded_classinfo"))]
     let classinfo_data = {
         info!("Reading ClassInfo from {}", &args.jdk_classinfo);
-        &std::fs::read_to_string(&args.jdk_classinfo)?
+        Some(std::fs::read_to_string(&args.jdk_classinfo)?)
     };
-    #[cfg(feature = "embedded_classinfo")]
-    let classinfo_data = {
-        let java_version = &args.java_version.numerical();
-        info!("Loading embedded ClassInfo for Java {java_version}");
-        classinfo_data
-            .get(java_version)
-            .expect("Failed to load embedded Class information!")
-    };
-    let java_classes = read_classinfo(classinfo_data)?;
+
+    if classinfo_data.is_none() {
+        return Err(error::Error::from(ArgError::IllegalCombination(
+            "Could not load JDK class information. Are you missing an argument?".to_owned(),
+        )));
+    }
+
+    let java_classes = read_classinfo(classinfo_data.as_ref().unwrap())?;
     trace!("{:?}", java_classes);
 
     info!("Starting processing...");
@@ -105,6 +120,18 @@ fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> 
     }
     debug!("ClassInfo: {} JDK classes loaded", result.len());
     Ok(result)
+}
+
+#[cfg(feature = "embedded_classinfo")]
+fn load_embedded(args: &Args, embedded: &HashMap<u16, &'static str>) -> Option<String> {
+    args.java_version.map(|v| -> String {
+        let java_version = &v.numerical();
+        info!("Loading embedded ClassInfo for Java {java_version}");
+        embedded
+            .get(java_version)
+            .expect("Failed to load embedded Class information!")
+            .to_string()
+    })
 }
 
 #[cfg(test)]
