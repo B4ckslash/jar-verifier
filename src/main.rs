@@ -43,6 +43,7 @@ fn main() -> Result<(), error::Error> {
         map.insert(11, include_str!("../data/11.classinfo"));
         map.insert(17, include_str!("../data/17.classinfo"));
         map.insert(21, include_str!("../data/21.classinfo"));
+        map.insert(25, include_str!("../data/25.classinfo"));
         map
     };
     #[cfg(feature = "embedded_classinfo")]
@@ -151,6 +152,11 @@ mod test {
     #[test]
     fn test_java_21() {
         execute_and_compare(21);
+    }
+
+    #[test]
+    fn test_java_25() {
+        execute_and_compare(25);
     }
 
     fn execute_and_compare(version: u16) {

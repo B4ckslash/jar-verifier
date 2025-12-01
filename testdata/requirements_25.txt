@@ -1,0 +1,12 @@
+org/example/LibraryWithDependencies
+	Class org/apache/commons/math3/distribution/BetaDistribution
+	Class org/apache/commons/math3/distribution/RealDistribution
+	Class org/apache/commons/math3/random/MersenneTwister
+	Class org/apache/commons/math3/random/UniformRandomGenerator
+	ClassMethod org/apache/commons/math3/distribution/BetaDistribution#<init>(DD)V
+	ClassMethod org/apache/commons/math3/random/MersenneTwister#<init>()V
+	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#<init>(Lorg/apache/commons/math3/random/RandomGenerator;)V
+	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#nextNormalizedDouble()D
+	IfaceMethod org/apache/commons/math3/distribution/RealDistribution#getNumericalMean()D
+org/example/LibraryWithoutDependencies
+	ClassMethod java/lang/ThreadGroup#allowThreadSuspension(Z)Z
