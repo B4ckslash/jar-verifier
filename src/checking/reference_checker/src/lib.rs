@@ -67,13 +67,16 @@ impl PartialEq for ClassRequirements<'_> {
 
 impl<'a> ClassRequirements<'a> {
     #[allow(dead_code)]
-    fn remove_class(&mut self, class: &str) {
+    fn remove_class(&mut self, class: &'a str) {
         trace!("Removing class {} from {}", class, self.name);
-        self.dependencies.remove(class);
+        if let Entry::Occupied(mut o) = self.dependencies.entry(class) {
+            o.get_mut().class_dep = false;
+        }
     }
 
     fn clear_empty_deps(&mut self) {
-        self.dependencies.retain(|_, dep| !dep.methods.is_empty());
+        self.dependencies
+            .retain(|_, dep| dep.class_dep || !dep.methods.is_empty());
     }
 
     fn remove_methods<'b>(
@@ -102,9 +105,8 @@ impl<'a> ClassRequirements<'a> {
         self.clear_empty_deps();
     }
 
-    fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
-        self.dependencies
-            .retain(|name, _| !java_classes.contains_key(name));
+    fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&'a str, ClassInfo>) {
+        java_classes.keys().for_each(|cls| self.remove_class(cls));
         for (class_name, dep) in self.dependencies.iter_mut() {
             dep.methods
                 .retain(|method| !Self::provides_method(class_name, method, java_classes));
@@ -199,6 +201,7 @@ impl<'a> ClassRequirements<'a> {
 struct Dependency {
     methods: HashSet<String>,
     is_interface: bool,
+    class_dep: bool,
 }
 
 impl Dependency {
@@ -276,6 +279,7 @@ impl<'a> Consumer<'a> for Class {
                 .or_insert(Dependency {
                     methods: HashSet::new(),
                     is_interface: false,
+                    class_dep: false,
                 })
                 .add(method);
         }
@@ -284,8 +288,18 @@ impl<'a> Consumer<'a> for Class {
                 .or_insert(Dependency {
                     methods: HashSet::new(),
                     is_interface: true,
+                    class_dep: false,
                 })
                 .add(method);
+        }
+        for cls in class_imports {
+            deps.entry(cls)
+                .or_insert(Dependency {
+                    methods: HashSet::new(),
+                    is_interface: false,
+                    class_dep: true,
+                })
+                .class_dep = true;
         }
         Ok(ClassRequirements {
             name: this_name,
@@ -361,6 +375,7 @@ fn collect_methods(
     if let Some(current_class) = classes.get(class_name) {
         trace!("Class {}", class_name);
         for method_signature in current_class.get_methods()? {
+            trace!("Method {} in {}", method_signature, class_name);
             result.insert(
                 method_signature.clone(),
                 Method::new(method_signature.clone()),
@@ -405,7 +420,7 @@ fn collect_methods(
 pub fn check_classes<'a>(
     classes: &'a HashMap<String, Class>,
     parallel: bool,
-    java_classes: &HashMap<&str, ClassInfo>,
+    java_classes: &HashMap<&'a str, ClassInfo>,
 ) -> Option<HashSet<ClassRequirements<'a>>> {
     info!("Checking class dependencies");
     let provided = get_provided(classes, parallel, java_classes);
@@ -422,17 +437,21 @@ pub fn check_classes<'a>(
     if parallel {
         dependencies.par_iter_mut().for_each(|dep| {
             for (class, method_provider) in &provided {
-                dep.remove_methods(class, &method_provider.methods);
-                // dep.remove_class(class); TODO figure out how to handle standalone missing
-                // methods (e.g. Class is present, but has different API)
+                if dep.dependencies.contains_key(class) {
+                    dep.remove_methods(class, &method_provider.methods);
+                    dep.remove_class(class);
+                }
+                dep.clear_empty_deps();
             }
         });
     } else {
         for dep in dependencies.iter_mut() {
             for (class, method_provider) in &provided {
-                dep.remove_methods(class, &method_provider.methods);
-                // dep.remove_class(class); TODO figure out how to handle standalone missing
-                // methods (e.g. Class is present, but has different API)
+                if dep.dependencies.contains_key(class) {
+                    dep.remove_methods(class, &method_provider.methods);
+                    dep.remove_class(class);
+                }
+                dep.clear_empty_deps();
             }
         }
     }
