@@ -21,9 +21,18 @@ type HashSet<E> = AHashSet<E>;
 
 struct ClassRequirements<'a> {
     name: &'a str,
-    classes: Vec<&'a str>,
-    class_methods: Vec<(&'a str, String)>,
-    iface_methods: Vec<(&'a str, String)>,
+    dependencies: HashMap<&'a str, Dependency>,
+}
+
+struct Dependency {
+    methods: Vec<String>,
+    is_interface: bool,
+}
+
+impl Dependency {
+    fn add(&mut self, method: String) {
+        self.methods.push(method);
+    }
 }
 
 trait Consumer<'a> {
