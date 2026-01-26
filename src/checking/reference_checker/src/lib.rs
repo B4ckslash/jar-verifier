@@ -477,10 +477,7 @@ pub fn check_classes<'a>(
     Some(result)
 }
 
-fn get_consumed(
-    classes: &HashMap<String, Class>,
-    parallel: bool,
-) -> HashSet<ClassDependencies<'_>> {
+fn get_consumed(classes: &HashMap<String, Class>, parallel: bool) -> HashSet<ClassDependencies<'_>> {
     if parallel {
         classes
             .par_iter()
