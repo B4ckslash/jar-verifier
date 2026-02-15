@@ -34,7 +34,7 @@ trait Provider {
         &self,
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
-    ) -> Result<Option<MethodProvider>, String>;
+    ) -> Result<Option<MethodProvider<'_>>, String>;
 }
 
 impl<'a> Consumer<'a> for Class {
@@ -134,7 +134,7 @@ impl Provider for Class {
         &self,
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
-    ) -> Result<Option<MethodProvider>, String> {
+    ) -> Result<Option<MethodProvider<'_>>, String> {
         let mut result = HashMap::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
@@ -159,7 +159,7 @@ impl Provider for Class {
 fn collect_methods(
     class_name: &str,
     classes: &HashMap<String, Class>,
-    java_classes: &HashMap<&str, ClassInfo>,
+    java_classes: &HashMap<&str, ClassInfo<'_>>,
 ) -> Result<HashMap<String, Method>, String> {
     let mut result = HashMap::new();
     if let Some(current_class) = classes.get(class_name) {
@@ -476,7 +476,10 @@ pub fn check_classes<'a>(
     Some(result)
 }
 
-fn get_consumed(classes: &HashMap<String, Class>, parallel: bool) -> HashSet<ClassDependencies> {
+fn get_consumed(
+    classes: &HashMap<String, Class>,
+    parallel: bool,
+) -> HashSet<ClassDependencies<'_>> {
     if parallel {
         classes
             .par_iter()

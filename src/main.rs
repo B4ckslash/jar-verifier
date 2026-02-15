@@ -111,7 +111,7 @@ fn format(dep: Vec<ClassDependencies>) -> String {
     result
 }
 
-fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo>, error::Error> {
+fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo<'_>>, error::Error> {
     let mut result = HashMap::new();
     let java_classes =
         classinfo::ClassInfo::from_string(data).expect("Failed to read classinfo file!");
