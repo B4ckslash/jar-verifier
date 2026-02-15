@@ -12,7 +12,7 @@ use std::{
 };
 
 use java_class::{
-    classinfo::ClassInfo,
+    classinfo::{ClassInfo, Method},
     java_class::{Class, ConstPoolEntry},
 };
 use log::{debug, info, trace};
@@ -125,7 +125,7 @@ fn process_method<'a>(
 
 struct MethodProvider<'a> {
     name: &'a str,
-    methods: HashSet<String>,
+    methods: HashMap<String, Method>,
     interface: bool,
 }
 
@@ -135,13 +135,13 @@ impl Provider for Class {
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
     ) -> Result<Option<MethodProvider>, String> {
-        let mut result = HashSet::new();
+        let mut result = HashMap::new();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
             if !self.is_module() {
                 trace!("Processing class {}", class_name);
-                for method_signature in collect_methods(class_name, classes, java_classes)? {
-                    result.insert(method_signature);
+                for (signature, method) in collect_methods(class_name, classes, java_classes)? {
+                    result.insert(signature, method);
                 }
                 return Ok(Some(MethodProvider {
                     name: class_name,
@@ -160,12 +160,15 @@ fn collect_methods(
     class_name: &str,
     classes: &HashMap<String, Class>,
     java_classes: &HashMap<&str, ClassInfo>,
-) -> Result<HashSet<String>, String> {
-    let mut result = HashSet::new();
+) -> Result<HashMap<String, Method>, String> {
+    let mut result = HashMap::new();
     if let Some(current_class) = classes.get(class_name) {
         trace!("Class {}", class_name);
         for method_signature in current_class.get_methods()? {
-            result.insert(method_signature);
+            result.insert(
+                method_signature.clone(),
+                Method::new(method_signature.clone()),
+            );
         }
         if let ConstPoolEntry::Class { name_index } =
             current_class.const_pool[&current_class.super_class_idx]
@@ -187,7 +190,12 @@ fn collect_methods(
     } else if let Some(super_class) = java_classes.get(class_name) {
         trace!("Java Class {}", class_name);
         trace!("Java Class Methods: {:?}", super_class.methods);
-        result.extend(super_class.methods.iter().map(|&s| s.to_owned()));
+        result.extend(
+            super_class
+                .methods
+                .iter()
+                .map(|(sig, m)| (sig.clone(), m.clone())),
+        );
         if let Some(super_class) = super_class.super_class {
             result.extend(collect_methods(super_class, classes, java_classes)?);
         }
@@ -296,8 +304,12 @@ impl<'a> ClassDependencies<'a> {
         self.iface_methods.retain(|_, set| !set.is_empty());
     }
 
-    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashSet<String>, iface: bool)
-    where
+    fn remove_methods<'b>(
+        &mut self,
+        class: &'a str,
+        methods: &'b HashMap<String, Method>,
+        iface: bool,
+    ) where
         'a: 'b,
     {
         trace!(
@@ -311,10 +323,10 @@ impl<'a> ClassDependencies<'a> {
         };
         if let Entry::Occupied(mut e) = entry {
             let value = e.get_mut();
-            for method in methods {
-                trace!("Trying to remove {}#{}", class, method.as_str());
-                if value.remove(method) {
-                    trace!("Removed {}#{}", class, method.as_str());
+            for sig in methods.keys() {
+                trace!("Trying to remove {}#{}", class, sig.as_str());
+                if value.remove(sig) {
+                    trace!("Removed {}#{}", class, sig.as_str());
                     trace!("Remaining methods for {}: {:?}", class, value);
                 }
             }
@@ -336,18 +348,36 @@ impl<'a> ClassDependencies<'a> {
     fn provides_method(class: &str, method: &str, java_classes: &HashMap<&str, ClassInfo>) -> bool {
         if let Some(class_info) = java_classes.get("java/lang/Object")
             && !method.contains("<init>")
-            && class_info.methods.contains(&method)
+            && class_info.methods.contains_key(method)
         {
             return true;
         }
         if let Some(class_info) = java_classes.get(class) {
-            if class_info.methods.contains(&method) {
+            if class_info.methods.contains_key(method) {
                 return true;
             }
-            if let Some(super_class) = class_info.super_class {
-                if Self::provides_method(super_class, method, java_classes) {
-                    return true;
+            if class_info.methods.values().any(|m| m.polymorphic_signature) {
+                let Some((method_name, _)) = method.split_once("(") else {
+                    panic!("Illegal method signature! {}", method)
+                };
+                for class_method in class_info.methods.values().filter_map(|m| {
+                    if m.polymorphic_signature {
+                        let Some((name, _)) = method.split_once("(") else {
+                            panic!("Illegal method signature! {}", method)
+                        };
+                        return Some(name);
+                    }
+                    None
+                }) {
+                    if method_name == class_method {
+                        return true;
+                    }
                 }
+            }
+            if let Some(super_class) = class_info.super_class
+                && Self::provides_method(super_class, method, java_classes)
+            {
+                return true;
             }
             for super_iface in &class_info.interfaces {
                 if Self::provides_method(super_iface, method, java_classes) {
