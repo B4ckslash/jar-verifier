@@ -6,10 +6,13 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
+use std::collections::HashMap;
+
 use nom::{
     IResult, Parser,
     bytes::complete::{tag, take_till},
-    character::complete::{char, line_ending, not_line_ending, usize},
+    character::complete::{char, line_ending, usize},
+    combinator::opt,
     multi::{many, many1, separated_list0},
     sequence::{preceded, terminated},
 };
@@ -21,7 +24,7 @@ pub struct ClassInfo<'a> {
     pub name: &'a str,
     pub super_class: Option<&'a str>,
     pub interfaces: Vec<&'a str>,
-    pub methods: Vec<&'a str>,
+    pub methods: HashMap<String, Method>,
 }
 
 impl<'a> ClassInfo<'a> {
@@ -41,11 +44,8 @@ impl<'a> ClassInfo<'a> {
         let (remaining, methods_count) = terminated(usize, line_ending).parse(remaining)?;
 
         trace!("Parsing {} methods", methods_count);
-        let (remaining, methods) = many(
-            methods_count,
-            preceded(tag("--"), terminated(not_line_ending, line_ending)),
-        )
-        .parse(remaining)?;
+        let (remaining, methods): (&str, Vec<Method>) =
+            many(methods_count, method).parse(remaining)?;
         trace!(
             "Parsed Class {} with super {}, interfaces {}, and methods {:?}",
             class_name, super_class, interfaces, methods
@@ -63,7 +63,10 @@ impl<'a> ClassInfo<'a> {
                 name: class_name,
                 super_class,
                 interfaces,
-                methods,
+                methods: methods
+                    .iter()
+                    .map(|m| (m.signature.to_owned(), m.clone()))
+                    .collect(),
             },
         ))
     }
@@ -74,4 +77,33 @@ impl<'a> ClassInfo<'a> {
             .map_err(|e| e.to_string())?
             .1)
     }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct Method {
+    pub signature: String,
+    pub polymorphic_signature: bool,
+}
+
+impl Method {
+    pub fn new(signature: String) -> Self {
+        Method {
+            signature,
+            polymorphic_signature: false,
+        }
+    }
+}
+
+fn method(input: &str) -> IResult<&str, Method> {
+    let (remaining, signature) =
+        preceded(tag("--"), take_till(|c| c == ':' || c == '\n')).parse(input)?;
+    let (remaining, polymorphic_signature) =
+        terminated(opt(preceded(tag(":"), tag("PS"))), line_ending).parse(remaining)?;
+    Ok((
+        remaining,
+        Method {
+            signature: signature.to_owned(),
+            polymorphic_signature: polymorphic_signature.is_some(),
+        },
+    ))
 }
