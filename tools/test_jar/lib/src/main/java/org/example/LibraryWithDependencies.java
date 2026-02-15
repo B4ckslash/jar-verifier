@@ -11,27 +11,40 @@ package org.example;
 import org.apache.commons.math3.random.MersenneTwister;
 import org.apache.commons.math3.random.UniformRandomGenerator;
 import org.apache.commons.math3.distribution.RealDistribution;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import org.apache.commons.math3.distribution.BetaDistribution;
 
 public class LibraryWithDependencies {
-    public static final UniformRandomGenerator RAND = new UniformRandomGenerator(new MersenneTwister());
-    private static final RealDistribution distribution = new BetaDistribution(0.5d, 0.5d);
-    private final String prefix;
+  public static final UniformRandomGenerator RAND = new UniformRandomGenerator(new MersenneTwister());
+  private static final RealDistribution distribution = new BetaDistribution(0.5d, 0.5d);
+  private final String prefix;
 
-    public LibraryWithDependencies() {
-        this(Double.toHexString(generateRandomDouble()));
-    }
+  public LibraryWithDependencies() {
+    this(Double.toHexString(generateRandomDouble()));
+  }
 
-    public LibraryWithDependencies(final String prefix) {
-        this.prefix = prefix;
-    }
+  public LibraryWithDependencies(final String prefix) {
+    this.prefix = prefix;
+  }
 
-    private static double generateRandomDouble() {
-        return RAND.nextNormalizedDouble();
-    }
+  private static double generateRandomDouble() {
+    return RAND.nextNormalizedDouble();
+  }
 
-    public String generateNewId()
-    {
-        return prefix + "--" + Double.toHexString(generateRandomDouble()) + Double.toHexString(distribution.getNumericalMean());
+  public String generateNewId() {
+    return prefix + "--" + Double.toHexString(generateRandomDouble())
+        + Double.toHexString(distribution.getNumericalMean());
+  }
+
+  public static void modifyVarHandle() {
+    try {
+      final VarHandle handle = MethodHandles.lookup().findVarHandle(LibraryWithDependencies.class, "RAND",
+          UniformRandomGenerator.class);
+      handle.get(new LibraryWithDependencies());
+    } catch (NoSuchFieldException | IllegalAccessException ex) {
     }
+  }
 }
