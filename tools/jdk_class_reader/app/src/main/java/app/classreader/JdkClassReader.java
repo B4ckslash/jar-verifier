@@ -9,6 +9,8 @@
 package app.classreader;
 
 import java.io.*;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -58,10 +60,13 @@ public class JdkClassReader {
             final Class<?>[] interfaces = clazz.getInterfaces();
             final List<String> constructors = stream(clazz.getDeclaredConstructors())
                     .filter(constructor -> Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers()))
-                    .map(c -> String.format("--%s%n", getInternalRepresentation(c))).collect(Collectors.toList());
+                    .map(c -> String.format("--%s%n", getInternalRepresentation(c, false))).collect(Collectors.toList());
+
+            final boolean possiblyPolymorphicMethod = VarHandle.class.equals(clazz) || MethodHandle.class.equals(clazz);
+
             final List<String> methods = stream(clazz.getDeclaredMethods())
                     .filter(method -> Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers()))
-                    .map(m -> String.format("--%s%n", getInternalRepresentation(m))).collect(Collectors.toList());
+                    .map(m -> String.format("--%s%n", getInternalRepresentation(m, possiblyPolymorphicMethod))).collect(Collectors.toList());
             writer.write(className);
             writer.write(SEPARATOR);
             if (superClass != null) {
@@ -115,13 +120,22 @@ public class JdkClassReader {
         return classes;
     }
 
-    private static String getInternalRepresentation(final Executable executable) {
+    private static String getInternalRepresentation(final Executable executable, final boolean possiblyPolymorphic) {
         final String name = executable instanceof Method ? executable.getName() : "<init>";
         final String parameters = stream(executable.getParameterTypes())
                 .map(JdkClassReader::mapType)
                 .collect(Collectors.joining());
         final String returnType = executable instanceof Method ? mapType(((Method) executable).getReturnType()) : mapType(void.class);
-        return String.format("%s(%s)%s", name, parameters, returnType);
+        final String signature = String.format("%s(%s)%s", name, parameters, returnType);
+        if(possiblyPolymorphic && executable instanceof Method && hasPolymorphicSignature((Method) executable)) {
+            return signature + ":PS";
+        }
+        return signature;
+    }
+
+    private static boolean hasPolymorphicSignature(final Method method) {
+        final boolean isObjectVarArgsParam = method.getParameterCount() == 1 && method.getParameterTypes()[0] == Object[].class;
+        return method.isVarArgs() && Modifier.isNative(method.getModifiers()) && isObjectVarArgsParam;
     }
 
     /**
