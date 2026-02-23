@@ -20,3 +20,4 @@ zip = { version = "8.0.0", default-features = false, features = [
 log = "0.4.26"
 rayon = "1.10.0"
 nom = "8.0.0"
+ahash = "0.8.12"

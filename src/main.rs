@@ -8,8 +8,9 @@
 
 mod args;
 mod error;
-use std::{collections::HashMap, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
+use ahash::AHashMap;
 use args::Args;
 use clap::Parser;
 use env_logger::Env;
@@ -21,6 +22,8 @@ use log::{debug, info, trace};
 use reference_checker::{ClassDependencies, check_classes};
 
 use crate::error::ArgError;
+
+type HashMap<K, V> = AHashMap<K, V>;
 
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -39,7 +42,7 @@ fn main() -> Result<(), error::Error> {
 
     #[cfg(feature = "embedded_classinfo")]
     let embedded_classinfo: HashMap<u16, &'static str> = {
-        let mut map = HashMap::new();
+        let mut map = HashMap::default();
         map.insert(11, include_str!("../data/11.classinfo"));
         map.insert(17, include_str!("../data/17.classinfo"));
         map.insert(21, include_str!("../data/21.classinfo"));
@@ -112,7 +115,7 @@ fn format(dep: Vec<ClassDependencies>) -> String {
 }
 
 fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo<'_>>, error::Error> {
-    let mut result = HashMap::new();
+    let mut result = HashMap::default();
     let java_classes =
         classinfo::ClassInfo::from_string(data).expect("Failed to read classinfo file!");
     for class_info in java_classes {
