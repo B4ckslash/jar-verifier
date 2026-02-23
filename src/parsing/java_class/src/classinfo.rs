@@ -6,8 +6,7 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
-use std::collections::HashMap;
-
+use ahash::AHashMap;
 use nom::{
     IResult, Parser,
     bytes::complete::{tag, take_till},
@@ -18,6 +17,8 @@ use nom::{
 };
 
 use log::trace;
+
+type HashMap<K, V> = AHashMap<K, V>;
 
 #[derive(Debug)]
 pub struct ClassInfo<'a> {

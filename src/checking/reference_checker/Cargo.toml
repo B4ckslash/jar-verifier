@@ -10,3 +10,4 @@ java_class = { path = "../../parsing/java_class/" }
 binrw = "0.15.0"
 rayon = "1.10.0"
 log = "0.4.26"
+ahash = "0.8.12"

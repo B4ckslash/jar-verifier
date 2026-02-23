@@ -6,12 +6,16 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
-use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
+use ahash::AHashMap;
+use ahash::AHashSet;
 use binrw::BinReaderExt;
 use binrw::prelude::*;
 use modular_bitfield_msb::prelude::*;
+
+type HashMap<K, V> = AHashMap<K, V>;
+type HashSet<E> = AHashSet<E>;
 
 #[binread]
 #[derive(Debug)]

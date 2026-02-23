@@ -6,17 +6,18 @@
 * SPDX-License-Identifier: MPL-2.0
 */
 
-use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
-    hash::Hash,
-};
+use std::{collections::hash_map::Entry, hash::Hash};
 
+use ahash::{AHashMap, AHashSet};
 use java_class::{
     classinfo::{ClassInfo, Method},
     java_class::{Class, ConstPoolEntry},
 };
 use log::{debug, info, trace};
 use rayon::prelude::*;
+
+type HashMap<K, V> = AHashMap<K, V>;
+type HashSet<E> = AHashSet<E>;
 
 struct ClassRequirements<'a> {
     name: &'a str,
@@ -135,7 +136,7 @@ impl Provider for Class {
         classes: &HashMap<String, Class>,
         java_classes: &HashMap<&str, ClassInfo>,
     ) -> Result<Option<MethodProvider<'_>>, String> {
-        let mut result = HashMap::new();
+        let mut result = HashMap::default();
         if let &ConstPoolEntry::Class { name_index } = &self.const_pool[&self.this_class_idx] {
             let class_name = self.get_utf8(&name_index)?;
             if !self.is_module() {
@@ -161,7 +162,7 @@ fn collect_methods(
     classes: &HashMap<String, Class>,
     java_classes: &HashMap<&str, ClassInfo<'_>>,
 ) -> Result<HashMap<String, Method>, String> {
-    let mut result = HashMap::new();
+    let mut result = HashMap::default();
     if let Some(current_class) = classes.get(class_name) {
         trace!("Class {}", class_name);
         for method_signature in current_class.get_methods()? {
@@ -256,9 +257,9 @@ impl PartialEq for ClassDependencies<'_> {
 
 impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
     fn from(val: ClassRequirements<'a>) -> Self {
-        let mut class_methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
-        let mut iface_methods: HashMap<&'a str, HashSet<String>> = HashMap::new();
-        let mut classes = HashSet::new();
+        let mut class_methods: HashMap<&'a str, HashSet<String>> = HashMap::default();
+        let mut iface_methods: HashMap<&'a str, HashSet<String>> = HashMap::default();
+        let mut classes = HashSet::default();
         classes.extend(val.classes);
         for (class, method) in val.class_methods {
             match class_methods.entry(class) {
@@ -266,7 +267,7 @@ impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
                     entry.get_mut().insert(method);
                 }
                 Entry::Vacant(entry) => {
-                    let mut set = HashSet::new();
+                    let mut set = HashSet::default();
                     set.insert(method);
                     entry.insert(set);
                 }
@@ -278,7 +279,7 @@ impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
                     entry.get_mut().insert(method);
                 }
                 Entry::Vacant(entry) => {
-                    let mut set = HashSet::new();
+                    let mut set = HashSet::default();
                     set.insert(method);
                     entry.insert(set);
                 }
@@ -467,7 +468,7 @@ pub fn check_classes<'a>(
         }
     }
     dependencies.retain(|dep| !dep.is_empty());
-    let mut result = HashSet::new();
+    let mut result = HashSet::default();
     result.extend(dependencies);
     info!(
         "Finished. Classes with unmet dependencies: {}",
@@ -484,11 +485,11 @@ fn get_consumed(
         classes
             .par_iter()
             .map(|(_, class)| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
-            .fold(HashSet::new, |mut a, b| {
+            .fold(HashSet::default, |mut a, b| {
                 a.insert(b);
                 a
             })
-            .reduce(HashSet::new, |mut a, b| {
+            .reduce(HashSet::default, |mut a, b| {
                 a.extend(b);
                 a
             })
@@ -496,7 +497,7 @@ fn get_consumed(
         classes
             .values()
             .map(|class| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
-            .fold(HashSet::new(), |mut a, b| {
+            .fold(HashSet::default(), |mut a, b| {
                 a.insert(b);
                 a
             })
@@ -514,11 +515,11 @@ fn get_provided<'a>(
             .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
             .filter(|opt| opt.is_some())
             .map(|opt| opt.unwrap())
-            .fold(HashMap::new, |mut a, b| {
+            .fold(HashMap::default, |mut a, b| {
                 a.insert(b.name, b);
                 a
             })
-            .reduce(HashMap::new, |mut a, b| {
+            .reduce(HashMap::default, |mut a, b| {
                 b.into_iter().for_each(|(k, v)| {
                     a.insert(k, v);
                 });
@@ -528,7 +529,7 @@ fn get_provided<'a>(
         classes
             .values()
             .filter_map(|class| class.get_provided(classes, java_classes).unwrap())
-            .fold(HashMap::new(), |mut a, b| {
+            .fold(HashMap::default(), |mut a, b| {
                 a.insert(b.name, b);
                 a
             })

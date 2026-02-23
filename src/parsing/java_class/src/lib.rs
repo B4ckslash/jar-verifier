@@ -7,12 +7,12 @@
 */
 
 use std::{
-    collections::HashMap,
     fs::File,
     io::{Cursor, Read},
     path::{Path, PathBuf},
 };
 
+use ahash::AHashMap;
 use java_class::{Class, ConstPoolEntry};
 use log::{debug, info};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -22,6 +22,7 @@ pub mod classinfo;
 pub mod error;
 pub mod java_class;
 
+type HashMap<K, V> = AHashMap<K, V>;
 type Result<T> = std::result::Result<T, error::Error>;
 
 fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
@@ -32,7 +33,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
         .create_new(false)
         .open(path)?;
     let mut archive = ZipArchive::new(file)?;
-    let mut classes = HashMap::new();
+    let mut classes = HashMap::default();
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
@@ -90,7 +91,7 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
         chained
             .par_iter()
             .map(|pb| read_zip_archive(pb.as_path()).unwrap())
-            .reduce(HashMap::new, |a, mut b| {
+            .reduce(HashMap::default, |a, mut b| {
                 a.into_iter().for_each(|(k, v)| {
                     b.insert(k, v);
                 });
@@ -106,7 +107,7 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
                 });
                 b
             })
-            .unwrap_or(HashMap::new())
+            .unwrap_or(HashMap::default())
     };
 
     info!("Finished. {} classes found.", result.len());
