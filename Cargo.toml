@@ -25,3 +25,8 @@ embedded_classinfo = []
 [profile.release]
 lto = true
 strip = true
+
+[profile.release-with-debug]
+inherits = "release"
+strip = "none"
+debug = true
