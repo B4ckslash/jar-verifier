@@ -435,7 +435,7 @@ checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "jar_verifier"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ahash",
  "binrw",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "java_class"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "ahash",
  "binrw",
@@ -650,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "reference_checker"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "ahash",
  "binrw",
