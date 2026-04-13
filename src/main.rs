@@ -28,7 +28,7 @@ type HashMap<K, V> = AHashMap<K, V>;
 fn main() -> Result<(), error::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse();
-    info!("Version {}", env!("CARGO_PKG_VERSION"));
+    info!("Version {}", git_version::git_version!(args = ["--tags", "--dirty=-modified"]));
     #[cfg(feature = "embedded_classinfo")]
     info!("With embedded class information");
     info!("Running with {} threads", args.threads);
