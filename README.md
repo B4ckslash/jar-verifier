@@ -55,9 +55,9 @@ The output can be roughly described by the following grammar:
 
 ```
 ClassRequirements := ClassName Requirement+
-Requirement       := <TAB>(ClassImport|MethodImport)
-ClassImport       := "Class " ClassName
-MethodImport      := ("ClassMethod "|"IfaceMethod ") MethodSpec
+Requirement       := <TAB>ClassImport
+ClassImport       := ("Class" | "Interface") ClassName ["(API mismatch)"] MethodImport+
+MethodImport      := <TAB>"Method " MethodSpec
 MethodSpec        := ClassName "#" MethodName MethodDescriptor
 ```
 

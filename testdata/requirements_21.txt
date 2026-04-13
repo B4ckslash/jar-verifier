@@ -1,12 +1,14 @@
 org/example/LibraryWithDependencies
 	Class org/apache/commons/math3/distribution/BetaDistribution
-	Class org/apache/commons/math3/distribution/RealDistribution
+		Method <init>(DD)V
+	Interface org/apache/commons/math3/distribution/RealDistribution
+		Method getNumericalMean()D
 	Class org/apache/commons/math3/random/MersenneTwister
+		Method <init>()V
 	Class org/apache/commons/math3/random/UniformRandomGenerator
-	ClassMethod org/apache/commons/math3/distribution/BetaDistribution#<init>(DD)V
-	ClassMethod org/apache/commons/math3/random/MersenneTwister#<init>()V
-	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#<init>(Lorg/apache/commons/math3/random/RandomGenerator;)V
-	ClassMethod org/apache/commons/math3/random/UniformRandomGenerator#nextNormalizedDouble()D
-	IfaceMethod org/apache/commons/math3/distribution/RealDistribution#getNumericalMean()D
+		Method <init>(Lorg/apache/commons/math3/random/RandomGenerator;)V
+		Method nextNormalizedDouble()D
 org/example/LibraryWithoutDependencies
-	ClassMethod java/lang/ThreadGroup#allowThreadSuspension(Z)Z
+	Class java/lang/ThreadGroup (API mismatch)
+		Method allowThreadSuspension(Z)Z
+

@@ -19,7 +19,7 @@ use java_class::{
     parse_classpath,
 };
 use log::{debug, info, trace};
-use reference_checker::{ClassDependencies, check_classes};
+use reference_checker::{ClassRequirements, check_classes};
 
 use crate::error::ArgError;
 
@@ -88,7 +88,7 @@ fn main() -> Result<(), error::Error> {
         check_classes(&classes, parallel, &java_classes).expect("Failed to get result");
     info!("Done.");
 
-    let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(unmet_deps.capacity());
+    let mut sorted: Vec<ClassRequirements<'_>> = Vec::with_capacity(unmet_deps.capacity());
     sorted.extend(unmet_deps);
     sorted.sort();
     if let Some(path) = args.output_file {
@@ -110,7 +110,7 @@ fn write_output(path: &str, content: &str) -> Result<(), error::Error> {
     Ok(())
 }
 
-fn format(dep: Vec<ClassDependencies>) -> String {
+fn format(dep: Vec<ClassRequirements>) -> String {
     let mut result = String::with_capacity(dep.capacity());
     for d in dep {
         result.push_str(d.format().as_str());
@@ -178,7 +178,7 @@ mod test {
 
         let consumed = check_classes(&classes, false, &java_classes).expect("Failed to get result");
 
-        let mut sorted: Vec<ClassDependencies<'_>> = Vec::with_capacity(consumed.capacity());
+        let mut sorted: Vec<ClassRequirements<'_>> = Vec::with_capacity(consumed.capacity());
         sorted.extend(consumed);
         sorted.sort();
 

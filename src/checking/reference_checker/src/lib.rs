@@ -19,11 +19,193 @@ use rayon::prelude::*;
 type HashMap<K, V> = AHashMap<K, V>;
 type HashSet<E> = AHashSet<E>;
 
-struct ClassRequirements<'a> {
+#[derive(Debug, Eq)]
+pub struct ClassRequirements<'a> {
     name: &'a str,
-    classes: Vec<&'a str>,
-    class_methods: Vec<(&'a str, String)>,
-    iface_methods: Vec<(&'a str, String)>,
+    dependencies: HashMap<&'a str, Dependency>,
+}
+
+impl PartialOrd for ClassRequirements<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        self.name.lt(other.name)
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        self.name.le(other.name)
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        self.name.gt(other.name)
+    }
+
+    fn ge(&self, other: &Self) -> bool {
+        self.name.ge(other.name)
+    }
+}
+
+impl Ord for ClassRequirements<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(other.name)
+    }
+}
+
+impl Hash for ClassRequirements<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(self.name.as_bytes());
+    }
+}
+
+impl PartialEq for ClassRequirements<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl<'a> ClassRequirements<'a> {
+    #[allow(dead_code)]
+    fn remove_class(&mut self, class: &'a str) {
+        trace!("Removing class {} from {}", class, self.name);
+        if let Entry::Occupied(mut o) = self.dependencies.entry(class) {
+            o.get_mut().class_dep = false;
+        }
+    }
+
+    fn clear_empty_deps(&mut self) {
+        self.dependencies
+            .retain(|_, dep| dep.class_dep || !dep.methods.is_empty());
+    }
+
+    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashMap<String, Method>)
+    where
+        'a: 'b,
+    {
+        trace!(
+            "Removing methods {:?} of class {} from {}",
+            methods, class, self.name
+        );
+        let entry = self.dependencies.entry(class);
+
+        if let Entry::Occupied(mut e) = entry {
+            let value = &mut e.get_mut().methods;
+            for sig in methods.keys() {
+                trace!("Trying to remove {}#{}", class, sig.as_str());
+                if value.remove(sig) {
+                    trace!("Removed {}#{}", class, sig.as_str());
+                    trace!("Remaining methods for {}: {:?}", class, value);
+                }
+            }
+        }
+        self.clear_empty_deps();
+    }
+
+    fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&'a str, ClassInfo>) {
+        java_classes.keys().for_each(|cls| self.remove_class(cls));
+        for (class_name, dep) in self.dependencies.iter_mut() {
+            dep.methods
+                .retain(|method| !Self::provides_method(class_name, method, java_classes));
+        }
+        self.clear_empty_deps();
+    }
+
+    fn provides_method(class: &str, method: &str, java_classes: &HashMap<&str, ClassInfo>) -> bool {
+        if let Some(class_info) = java_classes.get("java/lang/Object")
+            && !method.contains("<init>")
+            && class_info.methods.contains_key(method)
+        {
+            return true;
+        }
+        if let Some(class_info) = java_classes.get(class) {
+            if class_info.methods.contains_key(method) {
+                return true;
+            }
+            if class_info.methods.values().any(|m| m.polymorphic_signature) {
+                let Some((method_name, _)) = method.split_once("(") else {
+                    panic!("Illegal method signature! {}", method)
+                };
+                for class_method in class_info.methods.values().filter_map(|m| {
+                    if m.polymorphic_signature {
+                        let Some((name, _)) = method.split_once("(") else {
+                            panic!("Illegal method signature! {}", method)
+                        };
+                        return Some(name);
+                    }
+                    None
+                }) {
+                    if method_name == class_method {
+                        return true;
+                    }
+                }
+            }
+            if let Some(super_class) = class_info.super_class
+                && Self::provides_method(super_class, method, java_classes)
+            {
+                return true;
+            }
+            for super_iface in &class_info.interfaces {
+                if Self::provides_method(super_iface, method, java_classes) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn is_empty(&self) -> bool {
+        self.dependencies.is_empty()
+    }
+
+    pub fn format(&'a self) -> String {
+        let mut result = self.name.to_owned();
+        result.push('\n');
+        let mut sorted: Vec<(&'a str, &Dependency)> = self
+            .dependencies
+            .iter()
+            .map(|(name, dep)| (*name, dep))
+            .collect();
+        sorted.sort_by_key(|&(name, _)| name);
+        for entry in sorted {
+            result.push('\t');
+            let cls = format!(
+                "{} {}",
+                if entry.1.is_interface {
+                    "Interface"
+                } else {
+                    "Class"
+                },
+                entry.0
+            );
+            result.push_str(cls.as_str());
+            if !entry.1.class_dep {
+                result.push_str(" (API mismatch)");
+            }
+            result.push('\n');
+            let mut sorted: Vec<&'a str> = entry.1.methods.iter().map(|s| s.as_str()).collect();
+            sorted.sort();
+            for method in sorted {
+                result.push_str("\t\t");
+                result.push_str(format!("Method {}", method).as_str());
+                result.push('\n');
+            }
+        }
+        result
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Dependency {
+    methods: HashSet<String>,
+    is_interface: bool,
+    class_dep: bool,
+}
+
+impl Dependency {
+    fn add(&mut self, method: String) {
+        self.methods.insert(method);
+    }
 }
 
 trait Consumer<'a> {
@@ -88,11 +270,38 @@ impl<'a> Consumer<'a> for Class {
                 }
             }
         }
+
+        let mut deps = HashMap::new();
+        for (cls, method) in required_class_methods {
+            deps.entry(cls)
+                .or_insert(Dependency {
+                    methods: HashSet::new(),
+                    is_interface: false,
+                    class_dep: false,
+                })
+                .add(method);
+        }
+        for (cls, method) in required_iface_methods {
+            deps.entry(cls)
+                .or_insert(Dependency {
+                    methods: HashSet::new(),
+                    is_interface: true,
+                    class_dep: false,
+                })
+                .add(method);
+        }
+        for cls in class_imports {
+            deps.entry(cls)
+                .or_insert(Dependency {
+                    methods: HashSet::new(),
+                    is_interface: false,
+                    class_dep: true,
+                })
+                .class_dep = true;
+        }
         Ok(ClassRequirements {
             name: this_name,
-            classes: class_imports,
-            class_methods: required_class_methods,
-            iface_methods: required_iface_methods,
+            dependencies: deps,
         })
     }
 }
@@ -127,7 +336,6 @@ fn process_method<'a>(
 struct MethodProvider<'a> {
     name: &'a str,
     methods: HashMap<String, Method>,
-    interface: bool,
 }
 
 impl Provider for Class {
@@ -147,7 +355,6 @@ impl Provider for Class {
                 return Ok(Some(MethodProvider {
                     name: class_name,
                     methods: result,
-                    interface: self.is_interface(),
                 }));
             }
             trace!("Skipping module-info.class");
@@ -166,6 +373,7 @@ fn collect_methods(
     if let Some(current_class) = classes.get(class_name) {
         trace!("Class {}", class_name);
         for method_signature in current_class.get_methods()? {
+            trace!("Method {} in {}", method_signature, class_name);
             result.insert(
                 method_signature.clone(),
                 Method::new(method_signature.clone()),
@@ -207,242 +415,18 @@ fn collect_methods(
     Ok(result)
 }
 
-#[derive(Debug, Eq, Clone)]
-pub struct ClassDependencies<'a> {
-    name: &'a str,
-    classes: HashSet<&'a str>,
-    class_methods: HashMap<&'a str, HashSet<String>>,
-    iface_methods: HashMap<&'a str, HashSet<String>>,
-}
-
-impl PartialOrd for ClassDependencies<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-
-    fn lt(&self, other: &Self) -> bool {
-        self.name.lt(other.name)
-    }
-
-    fn le(&self, other: &Self) -> bool {
-        self.name.le(other.name)
-    }
-
-    fn gt(&self, other: &Self) -> bool {
-        self.name.gt(other.name)
-    }
-
-    fn ge(&self, other: &Self) -> bool {
-        self.name.ge(other.name)
-    }
-}
-
-impl Ord for ClassDependencies<'_> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.name.cmp(other.name)
-    }
-}
-
-impl Hash for ClassDependencies<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write(self.name.as_bytes());
-    }
-}
-
-impl PartialEq for ClassDependencies<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl<'a> From<ClassRequirements<'a>> for ClassDependencies<'a> {
-    fn from(val: ClassRequirements<'a>) -> Self {
-        let mut class_methods: HashMap<&'a str, HashSet<String>> = HashMap::default();
-        let mut iface_methods: HashMap<&'a str, HashSet<String>> = HashMap::default();
-        let mut classes = HashSet::default();
-        classes.extend(val.classes);
-        for (class, method) in val.class_methods {
-            match class_methods.entry(class) {
-                Entry::Occupied(mut entry) => {
-                    entry.get_mut().insert(method);
-                }
-                Entry::Vacant(entry) => {
-                    let mut set = HashSet::default();
-                    set.insert(method);
-                    entry.insert(set);
-                }
-            };
-        }
-        for (class, method) in val.iface_methods {
-            match iface_methods.entry(class) {
-                Entry::Occupied(mut entry) => {
-                    entry.get_mut().insert(method);
-                }
-                Entry::Vacant(entry) => {
-                    let mut set = HashSet::default();
-                    set.insert(method);
-                    entry.insert(set);
-                }
-            };
-        }
-        ClassDependencies {
-            name: val.name,
-            classes,
-            class_methods,
-            iface_methods,
-        }
-    }
-}
-
-impl<'a> ClassDependencies<'a> {
-    fn remove_class(&mut self, class: &str) {
-        trace!("Removing class {} from {}", class, self.name);
-        self.classes.remove(class);
-    }
-
-    fn clear_empty_deps(&mut self) {
-        self.class_methods.retain(|_, set| !set.is_empty());
-        self.iface_methods.retain(|_, set| !set.is_empty());
-    }
-
-    fn remove_methods<'b>(
-        &mut self,
-        class: &'a str,
-        methods: &'b HashMap<String, Method>,
-        iface: bool,
-    ) where
-        'a: 'b,
-    {
-        trace!(
-            "Removing methods {:?} of class {} from {}",
-            methods, class, self.name
-        );
-        let entry: Entry<'_, _, _> = if iface {
-            self.iface_methods.entry(class)
-        } else {
-            self.class_methods.entry(class)
-        };
-        if let Entry::Occupied(mut e) = entry {
-            let value = e.get_mut();
-            for sig in methods.keys() {
-                trace!("Trying to remove {}#{}", class, sig.as_str());
-                if value.remove(sig) {
-                    trace!("Removed {}#{}", class, sig.as_str());
-                    trace!("Remaining methods for {}: {:?}", class, value);
-                }
-            }
-        }
-        self.clear_empty_deps();
-    }
-
-    fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&str, ClassInfo>) {
-        self.classes.retain(|name| !java_classes.contains_key(name));
-        for (class_name, methods) in self.class_methods.iter_mut() {
-            methods.retain(|method| !Self::provides_method(class_name, method, java_classes));
-        }
-        for (iface_name, methods) in self.iface_methods.iter_mut() {
-            methods.retain(|method| !Self::provides_method(iface_name, method, java_classes));
-        }
-        self.clear_empty_deps();
-    }
-
-    fn provides_method(class: &str, method: &str, java_classes: &HashMap<&str, ClassInfo>) -> bool {
-        if let Some(class_info) = java_classes.get("java/lang/Object")
-            && !method.contains("<init>")
-            && class_info.methods.contains_key(method)
-        {
-            return true;
-        }
-        if let Some(class_info) = java_classes.get(class) {
-            if class_info.methods.contains_key(method) {
-                return true;
-            }
-            if class_info.methods.values().any(|m| m.polymorphic_signature) {
-                let Some((method_name, _)) = method.split_once("(") else {
-                    panic!("Illegal method signature! {}", method)
-                };
-                for class_method in class_info.methods.values().filter_map(|m| {
-                    if m.polymorphic_signature {
-                        let Some((name, _)) = method.split_once("(") else {
-                            panic!("Illegal method signature! {}", method)
-                        };
-                        return Some(name);
-                    }
-                    None
-                }) {
-                    if method_name == class_method {
-                        return true;
-                    }
-                }
-            }
-            if let Some(super_class) = class_info.super_class
-                && Self::provides_method(super_class, method, java_classes)
-            {
-                return true;
-            }
-            for super_iface in &class_info.interfaces {
-                if Self::provides_method(super_iface, method, java_classes) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.class_methods.is_empty() && self.iface_methods.is_empty()
-    }
-
-    pub fn format(&'a self) -> String {
-        let mut result = self.name.to_owned();
-        result.push('\n');
-        let mut sorted: Vec<&&str> = self.classes.iter().collect();
-        sorted.sort();
-        for class in sorted {
-            result.push('\t');
-            result.push_str(format!("Class {class}").as_str());
-            result.push('\n');
-        }
-        let mut sorted: Vec<(&&str, &HashSet<String>)> = self.class_methods.iter().collect();
-        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
-        result.push_str(Self::methods_to_str(&sorted, "ClassMethod").as_str());
-        sorted = self.iface_methods.iter().collect();
-        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
-        result.push_str(Self::methods_to_str(&sorted, "IfaceMethod").as_str());
-        result
-    }
-
-    fn methods_to_str(sorted_methods: &Vec<(&&str, &'a HashSet<String>)>, prefix: &str) -> String {
-        let mut result: String = Default::default();
-        for (class, methods) in sorted_methods {
-            let mut sorted: Vec<&String> = methods.iter().collect();
-            sorted.sort();
-            for method in sorted {
-                result.push('\t');
-                result.push_str(format!("{prefix} {class}#{method}").as_str());
-                result.push('\n');
-            }
-        }
-        result
-    }
-}
-
 pub fn check_classes<'a>(
     classes: &'a HashMap<String, Class>,
     parallel: bool,
-    java_classes: &HashMap<&str, ClassInfo>,
-) -> Option<HashSet<ClassDependencies<'a>>> {
+    java_classes: &HashMap<&'a str, ClassInfo>,
+) -> Option<HashSet<ClassRequirements<'a>>> {
     info!("Checking class dependencies");
     let provided = get_provided(classes, parallel, java_classes);
-    let mut dependencies: Vec<ClassDependencies<'a>> = Vec::new();
+    let mut dependencies: Vec<ClassRequirements<'a>> = Vec::new();
     dependencies.extend(get_consumed(classes, parallel));
-    let mut dependencies: Vec<ClassDependencies<'a>> = dependencies
-        .iter_mut()
-        .map(|d| {
-            d.remove_java_classes_and_methods(java_classes);
-            d.to_owned()
-        })
-        .collect();
+    for dep in dependencies.iter_mut() {
+        dep.remove_java_classes_and_methods(java_classes);
+    }
     debug!(
         "Provided size {} | Dependencies count {}",
         provided.capacity(),
@@ -451,19 +435,21 @@ pub fn check_classes<'a>(
     if parallel {
         dependencies.par_iter_mut().for_each(|dep| {
             for (class, method_provider) in &provided {
-                if dep.classes.contains(class) {
+                if dep.dependencies.contains_key(class) {
+                    dep.remove_methods(class, &method_provider.methods);
                     dep.remove_class(class);
-                    dep.remove_methods(class, &method_provider.methods, method_provider.interface);
                 }
+                dep.clear_empty_deps();
             }
         });
     } else {
         for dep in dependencies.iter_mut() {
-            for (class, methods) in &provided {
-                if dep.classes.contains(class) {
+            for (class, method_provider) in &provided {
+                if dep.dependencies.contains_key(class) {
+                    dep.remove_methods(class, &method_provider.methods);
                     dep.remove_class(class);
-                    dep.remove_methods(class, &methods.methods, methods.interface);
                 }
+                dep.clear_empty_deps();
             }
         }
     }
@@ -480,11 +466,11 @@ pub fn check_classes<'a>(
 fn get_consumed(
     classes: &HashMap<String, Class>,
     parallel: bool,
-) -> HashSet<ClassDependencies<'_>> {
+) -> HashSet<ClassRequirements<'_>> {
     if parallel {
         classes
             .par_iter()
-            .map(|(_, class)| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
+            .map(|(_, class)| class.get_consumed().unwrap())
             .fold(HashSet::default, |mut a, b| {
                 a.insert(b);
                 a
@@ -496,7 +482,7 @@ fn get_consumed(
     } else {
         classes
             .values()
-            .map(|class| Into::<ClassDependencies<'_>>::into(class.get_consumed().unwrap()))
+            .map(|class| class.get_consumed().unwrap())
             .fold(HashSet::default(), |mut a, b| {
                 a.insert(b);
                 a
