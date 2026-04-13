@@ -1,6 +1,6 @@
 [package]
 name = "jar_verifier"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 description = "Verifies JAR dependencies by checking their imported classes and used methods"
 
