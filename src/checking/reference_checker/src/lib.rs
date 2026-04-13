@@ -79,11 +79,8 @@ impl<'a> ClassRequirements<'a> {
             .retain(|_, dep| dep.class_dep || !dep.methods.is_empty());
     }
 
-    fn remove_methods<'b>(
-        &mut self,
-        class: &'a str,
-        methods: &'b HashMap<String, Method>,
-    ) where
+    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashMap<String, Method>)
+    where
         'a: 'b,
     {
         trace!(
@@ -172,24 +169,25 @@ impl<'a> ClassRequirements<'a> {
         sorted.sort_by_key(|&(name, _)| name);
         for entry in sorted {
             result.push('\t');
-            result.push_str(format!("Class {}", entry.0).as_str());
+            let cls = format!(
+                "{} {}",
+                if entry.1.is_interface {
+                    "Interface"
+                } else {
+                    "Class"
+                },
+                entry.0
+            );
+            result.push_str(cls.as_str());
+            if !entry.1.class_dep {
+                result.push_str(" (API mismatch)");
+            }
             result.push('\n');
             let mut sorted: Vec<&'a str> = entry.1.methods.iter().map(|s| s.as_str()).collect();
             sorted.sort();
             for method in sorted {
                 result.push_str("\t\t");
-                result.push_str(
-                    format!(
-                        "{}Method {}",
-                        if entry.1.is_interface {
-                            "Iface"
-                        } else {
-                            "Class"
-                        },
-                        method
-                    )
-                    .as_str(),
-                );
+                result.push_str(format!("Method {}", method).as_str());
                 result.push('\n');
             }
         }
