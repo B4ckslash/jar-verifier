@@ -32,3 +32,6 @@ strip = true
 inherits = "release"
 strip = "none"
 debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(without_version)'] }
