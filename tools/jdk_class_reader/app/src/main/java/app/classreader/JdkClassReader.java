@@ -56,6 +56,7 @@ public class JdkClassReader {
                     || Modifier.isProtected(clazz.getModifiers()))) {
                 continue;
             }
+            final boolean isInterface = clazz.isInterface();
             final Class<?> superClass = clazz.getSuperclass();
             final Class<?>[] interfaces = clazz.getInterfaces();
             final List<String> constructors = stream(clazz.getDeclaredConstructors())
@@ -69,6 +70,10 @@ public class JdkClassReader {
                     .map(m -> String.format("--%s%n", getInternalRepresentation(m, possiblyPolymorphicMethod))).collect(Collectors.toList());
             writer.write(className);
             writer.write(SEPARATOR);
+            if(isInterface) {
+                writer.write("I");
+                writer.write(SEPARATOR);
+            }
             if (superClass != null) {
                 writer.write(superClass.getName().replace('.', '/'));
             }

@@ -12,6 +12,7 @@ use nom::{
     bytes::complete::{tag, take_till},
     character::complete::{char, line_ending, usize},
     combinator::opt,
+    error::Error,
     multi::{many, many1, separated_list0},
     sequence::{preceded, terminated},
 };
@@ -23,6 +24,7 @@ type HashMap<K, V> = AHashMap<K, V>;
 #[derive(Debug)]
 pub struct ClassInfo<'a> {
     pub name: &'a str,
+    pub is_interface: bool,
     pub super_class: Option<&'a str>,
     pub interfaces: Vec<&'a str>,
     pub methods: HashMap<String, Method>,
@@ -38,8 +40,11 @@ impl<'a> ClassInfo<'a> {
                 &data
             }
         );
+        let mut interface = opt(terminated(char::<&'a str, Error<&'a str>>('I'), char(':')))
+            .map(|opt| opt.is_some());
         let mut colon_terminated = terminated(take_till(|c| c == ':'), char(':'));
         let (remaining, class_name) = colon_terminated.parse(data)?;
+        let (remaining, is_interface) = interface.parse(remaining)?;
         let (remaining, super_class) = colon_terminated.parse(remaining)?;
         let (remaining, interfaces) = colon_terminated.parse(remaining)?;
         let (remaining, methods_count) = terminated(usize, line_ending).parse(remaining)?;
@@ -62,6 +67,7 @@ impl<'a> ClassInfo<'a> {
             remaining,
             ClassInfo {
                 name: class_name,
+                is_interface,
                 super_class,
                 interfaces,
                 methods: methods
