@@ -66,11 +66,14 @@ impl PartialEq for ClassRequirements<'_> {
 }
 
 impl<'a> ClassRequirements<'a> {
-    #[allow(dead_code)]
-    fn remove_class(&mut self, class: &'a str) {
-        trace!("Removing class {} from {}", class, self.name);
-        if let Entry::Occupied(mut o) = self.dependencies.entry(class) {
-            o.get_mut().class_dep = false;
+    fn remove_class(&mut self, name: &'a str, interface: bool) {
+        trace!("Removing class {} from {}", name, self.name);
+        if let Entry::Occupied(mut o) = self.dependencies.entry(name) {
+            let dep = o.get_mut();
+            //interface flag does not matter if there are no methods missing
+            if dep.methods.is_empty() || dep.is_interface == interface {
+                dep.class_dep = false;
+            }
         }
     }
 
@@ -79,19 +82,23 @@ impl<'a> ClassRequirements<'a> {
             .retain(|_, dep| dep.class_dep || !dep.methods.is_empty());
     }
 
-    fn remove_methods<'b>(&mut self, class: &'a str, methods: &'b HashMap<String, Method>)
+    fn remove_methods<'b>(&mut self, class: &'a str, provider: &'b MethodProvider<'b>)
     where
         'a: 'b,
     {
         trace!(
             "Removing methods {:?} of class {} from {}",
-            methods, class, self.name
+            &provider.methods, class, self.name
         );
         let entry = self.dependencies.entry(class);
 
         if let Entry::Occupied(mut e) = entry {
-            let value = &mut e.get_mut().methods;
-            for sig in methods.keys() {
+            let entry = &mut e.get_mut();
+            if entry.is_interface != provider.interface {
+                return;
+            }
+            let value = &mut entry.methods;
+            for sig in provider.methods.keys() {
                 trace!("Trying to remove {}#{}", class, sig.as_str());
                 if value.remove(sig) {
                     trace!("Removed {}#{}", class, sig.as_str());
@@ -103,7 +110,9 @@ impl<'a> ClassRequirements<'a> {
     }
 
     fn remove_java_classes_and_methods(&mut self, java_classes: &HashMap<&'a str, ClassInfo>) {
-        java_classes.keys().for_each(|cls| self.remove_class(cls));
+        java_classes
+            .iter()
+            .for_each(|(cls, cls_info)| self.remove_class(cls, cls_info.is_interface));
         for (class_name, dep) in self.dependencies.iter_mut() {
             dep.methods
                 .retain(|method| !Self::provides_method(class_name, method, java_classes));
@@ -166,6 +175,15 @@ impl<'a> ClassRequirements<'a> {
             .iter()
             .map(|(name, dep)| (*name, dep))
             .collect();
+
+        let mut visited = HashSet::default();
+        for (name, _) in &sorted {
+            if visited.contains(name) {
+                panic!("Two entries of class {} in {:?}", name, sorted);
+            }
+            visited.insert(name);
+        }
+
         sorted.sort_by_key(|&(name, _)| name);
         for entry in sorted {
             result.push('\t');
@@ -273,22 +291,32 @@ impl<'a> Consumer<'a> for Class {
 
         let mut deps = HashMap::new();
         for (cls, method) in required_class_methods {
-            deps.entry(cls)
-                .or_insert(Dependency {
-                    methods: HashSet::new(),
-                    is_interface: false,
-                    class_dep: false,
-                })
-                .add(method);
+            let entry = deps.entry(cls).or_insert(Dependency {
+                methods: HashSet::new(),
+                is_interface: false,
+                class_dep: false,
+            });
+            if entry.is_interface {
+                panic!(
+                    "Trying to add class method to iface dependency! Method: {} | Class: {}",
+                    method, cls
+                )
+            }
+            entry.add(method);
         }
         for (cls, method) in required_iface_methods {
-            deps.entry(cls)
-                .or_insert(Dependency {
-                    methods: HashSet::new(),
-                    is_interface: true,
-                    class_dep: false,
-                })
-                .add(method);
+            let entry = deps.entry(cls).or_insert(Dependency {
+                methods: HashSet::new(),
+                is_interface: true,
+                class_dep: false,
+            });
+            if !entry.is_interface {
+                panic!(
+                    "Trying to add iface method to class dependency! Method: {} | Class: {}",
+                    method, cls
+                )
+            }
+            entry.add(method);
         }
         for cls in class_imports {
             deps.entry(cls)
@@ -333,8 +361,10 @@ fn process_method<'a>(
     )))
 }
 
+#[derive(Debug)]
 struct MethodProvider<'a> {
     name: &'a str,
+    interface: bool,
     methods: HashMap<String, Method>,
 }
 
@@ -354,6 +384,7 @@ impl Provider for Class {
                 }
                 return Ok(Some(MethodProvider {
                     name: class_name,
+                    interface: self.is_interface(),
                     methods: result,
                 }));
             }
@@ -436,8 +467,8 @@ pub fn check_classes<'a>(
         dependencies.par_iter_mut().for_each(|dep| {
             for (class, method_provider) in &provided {
                 if dep.dependencies.contains_key(class) {
-                    dep.remove_methods(class, &method_provider.methods);
-                    dep.remove_class(class);
+                    dep.remove_methods(class, &method_provider);
+                    dep.remove_class(class, method_provider.interface);
                 }
                 dep.clear_empty_deps();
             }
@@ -446,8 +477,8 @@ pub fn check_classes<'a>(
         for dep in dependencies.iter_mut() {
             for (class, method_provider) in &provided {
                 if dep.dependencies.contains_key(class) {
-                    dep.remove_methods(class, &method_provider.methods);
-                    dep.remove_class(class);
+                    dep.remove_methods(class, &method_provider);
+                    dep.remove_class(class, method_provider.interface);
                 }
                 dep.clear_empty_deps();
             }
