@@ -1,23 +1,23 @@
 [package]
 name = "java_class"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-binrw = "0.15.0"
+binrw = "0.15.2"
 modular-bitfield-msb = "0.11.2"
-shellexpand = "3.1.0"
-glob = "0.3.2"
-zip = { version = "8.0.0", default-features = false, features = [
+shellexpand = "3.1.2"
+glob = "0.3.4"
+zip = { version = "8.6.0", default-features = false, features = [
   "bzip2",
   "deflate",
   "deflate64",
   "lzma",
   "zstd",
 ] }
-log = "0.4.26"
-rayon = "1.10.0"
+log = "0.4.32"
+rayon = "1.12.0"
 nom = "8.0.0"
 ahash = "0.8.12"

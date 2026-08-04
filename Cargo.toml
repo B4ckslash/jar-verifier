@@ -1,6 +1,6 @@
 [package]
 name = "jar_verifier"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 description = "Verifies JAR dependencies by checking their imported classes and used methods"
 
@@ -9,10 +9,10 @@ description = "Verifies JAR dependencies by checking their imported classes and 
 [dependencies]
 java_class = { path = "./src/parsing/java_class/" }
 reference_checker = { path = "./src/checking/reference_checker/" }
-env_logger = "0.11.6"
-log = { version = "0.4.26", features = ["release_max_level_debug"] }
-clap = { version = "4.5.31", features = ["derive"] }
-rayon = "1.10.0"
+env_logger = "0.11.11"
+log = { version = "0.4.33", features = ["release_max_level_debug"] }
+clap = { version = "4.6.5", features = ["derive"] }
+rayon = "1.12.0"
 ahash = "0.8.12"
 git-version = "0.3.9"
 
