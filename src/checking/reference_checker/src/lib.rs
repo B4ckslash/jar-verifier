@@ -448,13 +448,12 @@ fn collect_methods(
 
 pub fn check_classes<'a>(
     classes: &'a HashMap<String, Class>,
-    parallel: bool,
     java_classes: &HashMap<&'a str, ClassInfo>,
 ) -> Option<HashSet<ClassRequirements<'a>>> {
     info!("Checking class dependencies");
-    let provided = get_provided(classes, parallel, java_classes);
+    let provided = get_provided(classes, java_classes);
     let mut dependencies: Vec<ClassRequirements<'a>> = Vec::new();
-    dependencies.extend(get_consumed(classes, parallel));
+    dependencies.extend(get_consumed(classes));
     for dep in dependencies.iter_mut() {
         dep.remove_java_classes_and_methods(java_classes);
     }
@@ -463,27 +462,15 @@ pub fn check_classes<'a>(
         provided.capacity(),
         dependencies.capacity()
     );
-    if parallel {
-        dependencies.par_iter_mut().for_each(|dep| {
-            for (class, method_provider) in &provided {
-                if dep.dependencies.contains_key(class) {
-                    dep.remove_methods(class, &method_provider);
-                    dep.remove_class(class, method_provider.interface);
-                }
-                dep.clear_empty_deps();
+    dependencies.par_iter_mut().for_each(|dep| {
+        for (class, method_provider) in &provided {
+            if dep.dependencies.contains_key(class) {
+                dep.remove_methods(class, &method_provider);
+                dep.remove_class(class, method_provider.interface);
             }
-        });
-    } else {
-        for dep in dependencies.iter_mut() {
-            for (class, method_provider) in &provided {
-                if dep.dependencies.contains_key(class) {
-                    dep.remove_methods(class, &method_provider);
-                    dep.remove_class(class, method_provider.interface);
-                }
-                dep.clear_empty_deps();
-            }
+            dep.clear_empty_deps();
         }
-    }
+    });
     dependencies.retain(|dep| !dep.is_empty());
     let mut result = HashSet::default();
     result.extend(dependencies);
@@ -494,61 +481,37 @@ pub fn check_classes<'a>(
     Some(result)
 }
 
-fn get_consumed(
-    classes: &HashMap<String, Class>,
-    parallel: bool,
-) -> HashSet<ClassRequirements<'_>> {
-    if parallel {
-        classes
-            .par_iter()
-            .map(|(_, class)| class.get_consumed().unwrap())
-            .fold(HashSet::default, |mut a, b| {
-                a.insert(b);
-                a
-            })
-            .reduce(HashSet::default, |mut a, b| {
-                a.extend(b);
-                a
-            })
-    } else {
-        classes
-            .values()
-            .map(|class| class.get_consumed().unwrap())
-            .fold(HashSet::default(), |mut a, b| {
-                a.insert(b);
-                a
-            })
-    }
+fn get_consumed(classes: &HashMap<String, Class>) -> HashSet<ClassRequirements<'_>> {
+    classes
+        .par_iter()
+        .map(|(_, class)| class.get_consumed().unwrap())
+        .fold(HashSet::default, |mut a, b| {
+            a.insert(b);
+            a
+        })
+        .reduce(HashSet::default, |mut a, b| {
+            a.extend(b);
+            a
+        })
 }
 
 fn get_provided<'a>(
     classes: &'a HashMap<String, Class>,
-    parallel: bool,
     java_classes: &HashMap<&str, ClassInfo>,
 ) -> HashMap<&'a str, MethodProvider<'a>> {
-    if parallel {
-        classes
-            .par_iter()
-            .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
-            .filter(|opt| opt.is_some())
-            .map(|opt| opt.unwrap())
-            .fold(HashMap::default, |mut a, b| {
-                a.insert(b.name, b);
-                a
-            })
-            .reduce(HashMap::default, |mut a, b| {
-                b.into_iter().for_each(|(k, v)| {
-                    a.insert(k, v);
-                });
-                a
-            })
-    } else {
-        classes
-            .values()
-            .filter_map(|class| class.get_provided(classes, java_classes).unwrap())
-            .fold(HashMap::default(), |mut a, b| {
-                a.insert(b.name, b);
-                a
-            })
-    }
+    classes
+        .par_iter()
+        .map(|(_, class)| class.get_provided(classes, java_classes).unwrap())
+        .filter(|opt| opt.is_some())
+        .map(|opt| opt.unwrap())
+        .fold(HashMap::default, |mut a, b| {
+            a.insert(b.name, b);
+            a
+        })
+        .reduce(HashMap::default, |mut a, b| {
+            b.into_iter().for_each(|(k, v)| {
+                a.insert(k, v);
+            });
+            a
+        })
 }

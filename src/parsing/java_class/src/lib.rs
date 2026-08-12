@@ -61,7 +61,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
     Ok(classes)
 }
 
-pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class>> {
+pub fn parse_classpath(cp: &str) -> Result<HashMap<String, Class>> {
     info!("Processing class path");
     let split = cp.split(';');
     let expanded = split
@@ -87,28 +87,15 @@ pub fn parse_classpath(cp: &str, parallel: bool) -> Result<HashMap<String, Class
     });
     let chained: Vec<PathBuf> = globbed.chain(concrete).collect();
     debug!("{} JAR files found.", chained.len());
-    let result = if parallel {
-        chained
-            .par_iter()
-            .map(|pb| read_zip_archive(pb.as_path()).unwrap())
-            .reduce(HashMap::default, |a, mut b| {
-                a.into_iter().for_each(|(k, v)| {
-                    b.insert(k, v);
-                });
-                b
-            })
-    } else {
-        chained
-            .iter()
-            .map(|pb| read_zip_archive(pb.as_path()).unwrap())
-            .reduce(|a, mut b| {
-                a.into_iter().for_each(|(k, v)| {
-                    b.insert(k, v);
-                });
-                b
-            })
-            .unwrap_or(HashMap::default())
-    };
+    let result = chained
+        .par_iter()
+        .map(|pb| read_zip_archive(pb.as_path()).unwrap())
+        .reduce(HashMap::default, |a, mut b| {
+            a.into_iter().for_each(|(k, v)| {
+                b.insert(k, v);
+            });
+            b
+        });
 
     info!("Finished. {} classes found.", result.len());
     Ok(result)
