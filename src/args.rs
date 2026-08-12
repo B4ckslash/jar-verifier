@@ -35,9 +35,9 @@ impl JdkVersion {
 )]
 #[cfg_attr(not(feature = "embedded_classinfo"), command(version, about))]
 pub struct Args {
-    ///Classpath of JARs to be checked.
+    ///Classpath of JARs to be checked. Simple globs are supported. Multiple classpaths may be given, separated by ';'.
     pub classpath: String,
-    ///Java version to check
+    ///Java version to check.
     #[cfg(feature = "embedded_classinfo")]
     #[arg(short, long)]
     pub java_version: Option<JdkVersion>,
