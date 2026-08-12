@@ -48,7 +48,7 @@ pub struct Args {
     ///A file listing the available classes and methods of the relevant JDK.
     #[cfg(not(feature = "embedded_classinfo"))]
     pub jdk_classinfo: String,
-    ///The number of threads to use.
+    ///The number of threads to use. Set to 0 to use all available threads.
     #[arg(short, long, default_value_t = 1usize)]
     pub threads: usize,
     ///The output file path. Prints to stdout if not set.

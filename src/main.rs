@@ -35,11 +35,20 @@ fn main() -> Result<(), error::Error> {
     );
     #[cfg(feature = "embedded_classinfo")]
     info!("With embedded class information");
-    info!("Running with {} threads", args.threads);
     info!("Path {}", args.classpath);
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.threads)
-        .build_global()?;
+    info!(
+        "Running with {} threads",
+        if args.threads > 0 {
+            args.threads
+        } else {
+            std::thread::available_parallelism()?.get()
+        }
+    );
+    if args.threads >= 1 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()?;
+    }
 
     #[cfg(feature = "embedded_classinfo")]
     let embedded_classinfo: HashMap<u16, &'static str> = {
