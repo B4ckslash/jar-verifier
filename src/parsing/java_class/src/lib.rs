@@ -14,7 +14,7 @@ use std::{
 
 use ahash::AHashMap;
 use java_class::{Class, ConstPoolEntry};
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
@@ -36,8 +36,10 @@ fn read_zip_archive(path: &Path, java_version: u16) -> Result<HashMap<String, Cl
     let mut archive = ZipArchive::new(file)?;
     let mut classes = HashMap::default();
 
+    let mut multi_release_candidates = HashMap::default();
+
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
+        let file = archive.by_index(i)?;
         if let Some(entry_path) = file.enclosed_name() {
             if let Some(ext) = entry_path.extension() {
                 if ext.eq("class") {
@@ -45,41 +47,79 @@ fn read_zip_archive(path: &Path, java_version: u16) -> Result<HashMap<String, Cl
                         let path_str = entry_path.as_os_str().to_string_lossy();
                         let split = &mut path_str[MULTI_RELEASE_PREFIX.len()..].split('/');
                         if let Some(version) = split.next()
-                            && let Ok(version) = u16::from_str_radix(version, 10)
+                            && let Ok(class_version) = u16::from_str_radix(version, 10)
                         {
-                            if version > java_version {
+                            if class_version > java_version {
                                 debug!(
                                     "Skipping {:?}: class is for Java version {}, which is newer than {}",
-                                    entry_path, version, java_version
+                                    entry_path, class_version, java_version
                                 );
-                                continue;
+                            } else if let Some(class_name) = split.last() {
+                                multi_release_candidates
+                                    .entry(class_name.to_string())
+                                    .and_modify(|e: &mut (u16, usize)| {
+                                        trace!("Replacing MR candidate for {} in version {} with version {}", class_name, e.0, class_version);
+                                        if e.0 < class_version {
+                                            e.0 = class_version;
+                                            e.1 = i;
+                                        }
+                                    })
+                                    .or_insert((class_version, i));
                             }
+                            continue;
                         }
                     }
-                    let mut file_inmem: Vec<u8> = vec![];
-                    if file.read_to_end(&mut file_inmem).is_err() {
-                        warn!(
-                            "Failed to read zip entry {:?} from {:?}!",
-                            entry_path.to_str(),
-                            path.to_str()
-                        );
-                        continue;
-                    }
-                    let class_parsed = Class::from(&mut Cursor::new(file_inmem));
-                    let ConstPoolEntry::Class { name_index } =
-                        &class_parsed.const_pool[&class_parsed.this_class_idx]
-                    else {
-                        continue;
+                    let (class_parsed, class_name) = match read_class(path, file) {
+                        Some(value) => value,
+                        None => continue,
                     };
-                    let Ok(class_name) = class_parsed.get_utf8(name_index) else {
-                        continue;
-                    };
-                    classes.insert(class_name.to_owned(), class_parsed);
+                    classes.insert(class_name, class_parsed);
                 }
             }
         }
     }
+    multi_release_candidates
+        .iter()
+        .filter_map(|(name, (version, index))| {
+            debug!("Using version {} for MR class {}", version, name);
+            read_class(
+                path,
+                archive
+                    .by_index(*index)
+                    .expect("Could not access archive file by index!"),
+            )
+        })
+        .for_each(|(class, class_name)| {
+            classes.insert(class_name, class);
+        });
     Ok(classes)
+}
+
+fn read_class(
+    archive_path: &Path,
+    mut file: zip::read::ZipFile<'_, File>,
+) -> Option<(Class, String)> {
+    let mut file_inmem: Vec<u8> = vec![];
+    if file.read_to_end(&mut file_inmem).is_err() {
+        warn!(
+            "Failed to read zip entry {:?} from {:?}!",
+            file.enclosed_name()
+                .expect("Could not get path of zip entry!")
+                .to_str(),
+            archive_path.to_str()
+        );
+        return None;
+    }
+    let class_parsed = Class::from(&mut Cursor::new(file_inmem));
+    let ConstPoolEntry::Class { name_index } =
+        &class_parsed.const_pool[&class_parsed.this_class_idx]
+    else {
+        return None;
+    };
+    let Ok(class_name) = class_parsed.get_utf8(name_index).map(ToString::to_string) else {
+        return None;
+    };
+    Some((class_parsed, class_name))
 }
 
 pub fn parse_classpath(cp: &str, java_version: u16) -> Result<HashMap<String, Class>> {
