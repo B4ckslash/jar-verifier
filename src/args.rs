@@ -40,7 +40,7 @@ pub struct Args {
     ///Java version to check.
     #[cfg(feature = "embedded_classinfo")]
     #[arg(short, long)]
-    pub java_version: Option<JdkVersion>,
+    pub jdk_version: Option<JdkVersion>,
     ///A file listing the available classes and methods of the relevant JDK.
     #[cfg(feature = "embedded_classinfo")]
     #[arg(long)]
