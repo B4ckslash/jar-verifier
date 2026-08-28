@@ -10,7 +10,6 @@ use std::io::{Read, Seek};
 
 use ahash::AHashMap;
 use ahash::AHashSet;
-use binrw::BinReaderExt;
 use binrw::prelude::*;
 use modular_bitfield_msb::prelude::*;
 
@@ -53,7 +52,7 @@ impl Class {
     where
         T: Read + Seek,
     {
-        data.read_be().unwrap()
+        binrw::BinReaderExt::read_be(data).unwrap()
     }
 
     pub fn get_utf8<'a>(&'a self, index: &u16) -> Result<&'a str, String> {
