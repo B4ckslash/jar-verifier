@@ -36,6 +36,7 @@ fn main() -> Result<(), error::Error> {
     #[cfg(feature = "embedded_classinfo")]
     info!("With embedded class information");
     info!("Path {}", args.classpath);
+    info!("Checking for Java version {}", args.java_version);
     info!(
         "Running with {} threads",
         if args.threads > 0 {
