@@ -25,7 +25,8 @@ pub mod java_class;
 type HashMap<K, V> = AHashMap<K, V>;
 type Result<T> = std::result::Result<T, error::Error>;
 
-fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
+fn read_zip_archive(path: &Path, java_version: u16) -> Result<HashMap<String, Class>> {
+    static MULTI_RELEASE_PREFIX: &str = "META-INF/versions/";
     debug!("Processing file {}...", path.to_str().unwrap());
     let file = File::options()
         .read(true)
@@ -40,9 +41,28 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
         if let Some(entry_path) = file.enclosed_name() {
             if let Some(ext) = entry_path.extension() {
                 if ext.eq("class") {
+                    if entry_path.starts_with(MULTI_RELEASE_PREFIX) {
+                        let path_str = entry_path.as_os_str().to_string_lossy();
+                        let split = &mut path_str[MULTI_RELEASE_PREFIX.len()..].split('/');
+                        if let Some(version) = split.next()
+                            && let Ok(version) = u16::from_str_radix(version, 10)
+                        {
+                            if version > java_version {
+                                debug!(
+                                    "Skipping {:?}: class is for Java version {}, which is newer than {}",
+                                    entry_path, version, java_version
+                                );
+                                continue;
+                            }
+                        }
+                    }
                     let mut file_inmem: Vec<u8> = vec![];
                     if file.read_to_end(&mut file_inmem).is_err() {
-                        warn!("Failed to read zip entry {:?} from {:?}!", entry_path.to_str(), path.to_str());
+                        warn!(
+                            "Failed to read zip entry {:?} from {:?}!",
+                            entry_path.to_str(),
+                            path.to_str()
+                        );
                         continue;
                     }
                     let class_parsed = Class::from(&mut Cursor::new(file_inmem));
@@ -62,7 +82,7 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
     Ok(classes)
 }
 
-pub fn parse_classpath(cp: &str) -> Result<HashMap<String, Class>> {
+pub fn parse_classpath(cp: &str, java_version: u16) -> Result<HashMap<String, Class>> {
     info!("Processing class path");
     let split = cp.split(';');
     let expanded = split
@@ -90,7 +110,7 @@ pub fn parse_classpath(cp: &str) -> Result<HashMap<String, Class>> {
     debug!("{} JAR files found.", chained.len());
     let result = chained
         .par_iter()
-        .map(|pb| read_zip_archive(pb.as_path()).unwrap())
+        .map(|pb| read_zip_archive(pb.as_path(), java_version).unwrap())
         .reduce(HashMap::default, |a, mut b| {
             a.into_iter().for_each(|(k, v)| {
                 b.insert(k, v);

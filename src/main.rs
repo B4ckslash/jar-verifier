@@ -90,7 +90,7 @@ fn main() -> Result<(), error::Error> {
     trace!("{:?}", java_classes);
 
     info!("Starting processing...");
-    let classes = parse_classpath(&args.classpath)?;
+    let classes = parse_classpath(&args.classpath, args.java_version)?;
     let unmet_deps = check_classes(&classes, &java_classes).expect("Failed to get result");
     info!("Done.");
 
@@ -181,7 +181,7 @@ mod test {
         let mut jar_path = pkg_path.to_owned();
         jar_path.push_str("/testdata/test_jar.jar");
 
-        let classes = parse_classpath(jar_path.as_str()).unwrap();
+        let classes = parse_classpath(jar_path.as_str(), version).unwrap();
         let consumed = check_classes(&classes, &java_classes).expect("Failed to get result");
         let mut sorted: Vec<ClassRequirements<'_>> = Vec::with_capacity(consumed.capacity());
         sorted.extend(consumed);
