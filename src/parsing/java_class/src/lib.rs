@@ -14,7 +14,7 @@ use std::{
 
 use ahash::AHashMap;
 use java_class::{Class, ConstPoolEntry};
-use log::{debug, info};
+use log::{debug, info, warn};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
@@ -37,11 +37,12 @@ fn read_zip_archive(path: &Path) -> Result<HashMap<String, Class>> {
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        if let Some(path) = file.enclosed_name() {
-            if let Some(ext) = path.extension() {
+        if let Some(entry_path) = file.enclosed_name() {
+            if let Some(ext) = entry_path.extension() {
                 if ext.eq("class") {
                     let mut file_inmem: Vec<u8> = vec![];
                     if file.read_to_end(&mut file_inmem).is_err() {
+                        warn!("Failed to read zip entry {:?} from {:?}!", entry_path.to_str(), path.to_str());
                         continue;
                     }
                     let class_parsed = Class::from(&mut Cursor::new(file_inmem));
