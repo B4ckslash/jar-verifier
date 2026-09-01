@@ -90,7 +90,9 @@ fn read_zip_archive(path: &Path, java_version: u16) -> Result<HashMap<String, Cl
             )
         })
         .for_each(|(class, class_name)| {
-            classes.insert(class_name, class);
+            if let Some(_) = classes.insert(class_name.clone(), class) {
+                trace!("Replaced base class {} with MR version", class_name);
+            }
         });
     Ok(classes)
 }
