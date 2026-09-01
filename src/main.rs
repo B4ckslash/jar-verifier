@@ -138,13 +138,12 @@ fn read_classinfo(data: &str) -> Result<HashMap<&str, ClassInfo<'_>>, error::Err
 
 #[cfg(feature = "embedded_classinfo")]
 fn load_embedded(args: &Args, embedded: &HashMap<u16, &'static str>) -> Option<String> {
-    args.jdk_version.map(|v| -> String {
-        let jdk_version = &v.numerical();
-        info!("Loading embedded ClassInfo for OpenJDK {jdk_version}");
-        embedded
-            .get(jdk_version)
-            .expect("Failed to load embedded Class information!")
-            .to_string()
+    let version = args
+        .jdk_version
+        .map_or(args.java_version, |jdk| jdk.numerical());
+    embedded.get(&version).map(|s| {
+        info!("Using embedded classinfo for Java {}", version);
+        s.to_string()
     })
 }
 
