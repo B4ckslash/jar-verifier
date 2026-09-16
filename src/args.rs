@@ -39,7 +39,7 @@ pub struct Args {
     pub classpath: String,
     ///Java version to check.
     #[cfg(feature = "embedded_classinfo")]
-    #[arg(short='J', long)]
+    #[arg(short = 'J', long)]
     pub jdk_version: Option<JdkVersion>,
     ///A file listing the available classes and methods of the relevant JDK.
     #[cfg(feature = "embedded_classinfo")]
@@ -48,7 +48,7 @@ pub struct Args {
     ///A file listing the available classes and methods of the relevant JDK.
     #[cfg(not(feature = "embedded_classinfo"))]
     pub jdk_classinfo: String,
-    #[arg(short, long, default_value_t=25u16)]
+    #[arg(short, long, default_value_t = 25u16)]
     ///The Java version to run against.
     pub java_version: u16,
     ///The number of threads to use. Set to 0 to use all available threads.
