@@ -137,7 +137,7 @@ impl<'a> ClassRequirements<'a> {
                 };
                 for class_method in class_info.methods.values().filter_map(|m| {
                     if m.polymorphic_signature {
-                        let Some((name, _)) = method.split_once("(") else {
+                        let Some((name, _)) = m.signature.split_once("(") else {
                             panic!("Illegal method signature! {}", method)
                         };
                         return Some(name);
